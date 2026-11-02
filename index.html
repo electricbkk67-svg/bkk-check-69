@@ -1,0 +1,2055 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>ระบบตรวจสอบพัสดุประจำปี 2569 — กองช่าง อบต.บางขุนกอง</title>
+  <!-- PWA & Theme -->
+  <meta name="theme-color" content="#0b0f19">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ตรวจพัสดุ 69">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232563eb'/><text x='50' y='66' font-size='54' text-anchor='middle'>📦</text></svg>">
+
+  <!-- Google Fonts: Prompt -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- SheetJS (xlsx) for Excel Import / Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <!-- Preloaded Assets Data from ตรวจสอบพัสดุ 2569.xlsx -->
+  <script src="assets_data.js"></script>
+
+  <style>
+    * {
+      font-family: 'Prompt', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      background-color: #0b0f19;
+      color: #f1f5f9;
+      height: 100%;
+      height: 100dvh;
+      margin: 0;
+      overflow: hidden;
+    }
+    body {
+      padding-top: max(0.5rem, env(safe-area-inset-top, 0px)) !important;
+      padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)) !important;
+      padding-left: max(0.5rem, env(safe-area-inset-left, 0px)) !important;
+      padding-right: max(0.5rem, env(safe-area-inset-right, 0px)) !important;
+      background-image:
+        radial-gradient(ellipse 80% 50% at 20% 0%, rgba(37, 99, 235, 0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 85% 95%, rgba(16, 185, 129, 0.08) 0%, transparent 60%);
+    }
+    input, select, textarea {
+      background-color: #151d2e !important;
+      color: #ffffff !important;
+      border: 1px solid #2a364f !important;
+      font-size: 16px !important; /* ป้องกัน iOS Auto-zoom */
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none !important;
+      border-color: #3b82f6 !important;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25) !important;
+    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+    /* Status Pill Active Glow */
+    .status-btn {
+      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .status-btn.active-usable {
+      background: linear-gradient(135deg, #059669, #10b981) !important;
+      border-color: #34d399 !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.45);
+      transform: translateY(-1px);
+    }
+    .status-btn.active-damaged {
+      background: linear-gradient(135deg, #d97706, #f59e0b) !important;
+      border-color: #fbbf24 !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 15px rgba(245, 158, 11, 0.45);
+      transform: translateY(-1px);
+    }
+    .status-btn.active-deteriorated {
+      background: linear-gradient(135deg, #ea580c, #f97316) !important;
+      border-color: #fb923c !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 15px rgba(249, 115, 22, 0.45);
+      transform: translateY(-1px);
+    }
+    .status-btn.active-unneeded {
+      background: linear-gradient(135deg, #7c3aed, #8b5cf6) !important;
+      border-color: #a78bfa !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 15px rgba(139, 92, 246, 0.45);
+      transform: translateY(-1px);
+    }
+    .status-btn.active-missing {
+      background: linear-gradient(135deg, #dc2626, #ef4444) !important;
+      border-color: #f87171 !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.45);
+      transform: translateY(-1px);
+    }
+    .status-btn.active-lost {
+      background: linear-gradient(135deg, #be123c, #e11d48) !important;
+      border-color: #fb7185 !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 15px rgba(225, 29, 72, 0.45);
+      transform: translateY(-1px);
+    }
+
+    @keyframes pulse-border {
+      0%, 100% { border-color: rgba(239, 68, 68, 0.6); }
+      50% { border-color: rgba(239, 68, 68, 1); }
+    }
+    .not-found-card {
+      animation: pulse-border 2s infinite;
+    }
+  </style>
+</head>
+<body class="max-w-xl mx-auto flex flex-col h-full select-none">
+
+  <!-- 1. HEADER -->
+  <header class="py-2 px-3 mb-2 flex items-center justify-between gap-2 shrink-0 bg-slate-900/90 border border-slate-800 rounded-xl shadow-md backdrop-blur">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-lg shadow shrink-0">
+        📦
+      </div>
+      <div class="flex flex-col leading-tight truncate">
+        <div class="flex items-center gap-1.5">
+          <h1 class="text-sm sm:text-base font-bold text-white truncate">ตรวจสอบพัสดุประจำปี 2569</h1>
+          <span id="cloudStatusDot" class="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="สถานะการบันทึก"></span>
+        </div>
+        <p class="text-[11px] text-slate-400 truncate">กองช่าง อบต.บางขุนกอง • <span id="activeSheetLabel" class="text-blue-400 font-medium">ครุภัณฑ์กองช่าง</span></p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-1.5 shrink-0">
+      <!-- ปุ่มสลับชีต -->
+      <button type="button" onclick="toggleSheetMode()" id="sheetSwitchBtn"
+        class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-xs font-semibold text-amber-300 flex items-center gap-1 transition shadow-sm"
+        title="สลับหมวดบัญชีพัสดุ">
+        <span>🔄</span> <span id="sheetSwitchText">ดูที่ดิน/สิ่งปลูกสร้าง</span>
+      </button>
+      <!-- ปุ่มตั้งค่า Cloud -->
+      <button type="button" onclick="openCloudModal()"
+        class="p-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-300 hover:text-white text-xs transition"
+        title="ตั้งค่าเชื่อม Google Sheets / Cloud">
+        ☁️
+      </button>
+      <!-- ปุ่มเต็มจอ -->
+      <button type="button" onclick="toggleFullScreen()"
+        class="p-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-300 hover:text-white text-xs transition"
+        title="เต็มจอ">
+        ⛶
+      </button>
+    </div>
+  </header>
+
+  <!-- 2. QUICK PROGRESS SUMMARY BAR -->
+  <div class="grid grid-cols-4 gap-1.5 mb-2 shrink-0">
+    <div onclick="jumpToFilter('all')" class="cursor-pointer bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800 rounded-xl p-2 text-center transition">
+      <div class="text-[10px] text-slate-400">ทั้งหมด</div>
+      <div id="statTotal" class="text-sm sm:text-base font-bold text-white">0</div>
+    </div>
+    <div onclick="jumpToFilter('checked')" class="cursor-pointer bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-800/50 rounded-xl p-2 text-center transition">
+      <div class="text-[10px] text-emerald-300">ตรวจแล้ว</div>
+      <div id="statChecked" class="text-sm sm:text-base font-bold text-emerald-400">0</div>
+    </div>
+    <div onclick="jumpToFilter('unchecked')" class="cursor-pointer bg-amber-950/40 hover:bg-amber-900/50 border border-amber-800/50 rounded-xl p-2 text-center transition">
+      <div class="text-[10px] text-amber-300">รอตรวจ</div>
+      <div id="statPending" class="text-sm sm:text-base font-bold text-amber-400">0</div>
+    </div>
+    <div onclick="jumpToFilter('unlisted')" class="cursor-pointer bg-rose-950/40 hover:bg-rose-900/50 border border-rose-800/50 rounded-xl p-2 text-center transition">
+      <div class="text-[10px] text-rose-300">นอกบัญชี</div>
+      <div id="statUnlisted" class="text-sm sm:text-base font-bold text-rose-400">0</div>
+    </div>
+  </div>
+
+  <!-- 3. NAVIGATION TABS -->
+  <nav class="grid grid-cols-3 gap-1 p-1 bg-slate-900 border border-slate-800 rounded-xl mb-2.5 shrink-0 shadow-inner">
+    <button type="button" id="tabCheckBtn" onclick="switchTab('check')"
+      class="py-2 px-2 rounded-lg font-bold text-white bg-blue-600 shadow text-xs sm:text-sm flex items-center justify-center gap-1.5 transition">
+      <span>🔍</span> <span>ค้นหา / ตรวจ</span>
+    </button>
+    <button type="button" id="tabListBtn" onclick="switchTab('list')"
+      class="py-2 px-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800 text-xs sm:text-sm flex items-center justify-center gap-1.5 transition">
+      <span>📋</span> <span>บัญชีทั้งหมด</span>
+    </button>
+    <button type="button" id="tabSummaryBtn" onclick="switchTab('summary')"
+      class="py-2 px-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800 text-xs sm:text-sm flex items-center justify-center gap-1.5 transition">
+      <span>📊</span> <span>สรุป / ส่งออก</span>
+    </button>
+  </nav>
+
+  <!-- ==========================================
+       TAB 1: SEARCH & INSPECT (เดินตรวจหน้างาน)
+       ========================================== -->
+  <div id="checkSection" class="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <!-- กล่องค้นหาอัจฉริยะ -->
+    <div class="bg-slate-900/95 border border-slate-800 rounded-xl p-3 mb-2.5 shrink-0 shadow-lg">
+      <div class="flex items-center justify-between mb-1.5">
+        <label for="mainSearchInput" class="text-xs font-semibold text-blue-300 flex items-center gap-1.5">
+          <span>🔎 พิมพ์เลขพัสดุ / รหัสครุภัณฑ์ หรือ ชื่อพัสดุ</span>
+        </label>
+        <span id="searchCountBadge" class="text-[11px] text-slate-400">พร้อมค้นหา</span>
+      </div>
+
+      <div class="relative flex items-center">
+        <input type="text" id="mainSearchInput"
+          placeholder="เช่น 005-41-0001, 097-69, สว่าน, เครื่องสูบน้ำ..."
+          autocomplete="off"
+          oninput="handleSearchInput()"
+          onkeydown="if(event.key==='Enter'){event.preventDefault(); selectFirstMatch();}"
+          class="w-full pl-3.5 pr-20 py-3 rounded-xl font-medium text-white placeholder-slate-500 shadow-inner">
+        <div class="absolute right-2 flex items-center gap-1">
+          <button type="button" id="clearSearchBtn" onclick="clearSearch()"
+            class="hidden px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition">
+            ✕ ล้าง
+          </button>
+        </div>
+      </div>
+
+      <!-- ปุ่มกรองด่วนสำหรับการเดินตรวจ -->
+      <div class="flex items-center gap-1.5 mt-2 overflow-x-auto pb-0.5 text-[11px]">
+        <span class="text-slate-400 shrink-0">คำค้นด่วน:</span>
+        <button type="button" onclick="quickSearch('เครื่องสูบน้ำ')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 shrink-0">เครื่องสูบน้ำ</button>
+        <button type="button" onclick="quickSearch('เลื่อย')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 shrink-0">เลื่อย</button>
+        <button type="button" onclick="quickSearch('สว่าน')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 shrink-0">สว่าน</button>
+        <button type="button" onclick="quickSearch('รถยนต์')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 shrink-0">รถยนต์/รถบรรทุก</button>
+        <button type="button" onclick="quickSearch('โต๊ะ')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 shrink-0">โต๊ะ/เก้าอี้</button>
+        <button type="button" onclick="quickSearch('-69-')" class="px-2 py-0.5 rounded-md bg-blue-950/70 hover:bg-blue-900 text-blue-300 border border-blue-800 shrink-0">ปี 69 (-69-)</button>
+      </div>
+    </div>
+
+    <!-- พื้นที่แสดงผลลัพธ์การค้นหา + ฟอร์มบันทึกผล -->
+    <div id="searchResultsArea" class="flex-1 min-h-0 overflow-y-auto space-y-2.5 pb-12 pr-0.5">
+      <!-- จะถูก Render ด้วย JavaScript -->
+    </div>
+  </div>
+
+  <!-- ==========================================
+       TAB 2: FULL LIST (รายการในบัญชีทั้งหมด)
+       ========================================== -->
+  <div id="listSection" class="hidden flex-1 min-h-0 flex-col overflow-hidden">
+    <!-- ตัวกรองในหน้ารายการ -->
+    <div class="bg-slate-900/95 border border-slate-800 rounded-xl p-2.5 mb-2 shrink-0 space-y-2">
+      <div class="flex gap-2">
+        <input type="text" id="listSearchInput" oninput="renderFullList()"
+          placeholder="กรองรหัส, ชื่อพัสดุ, รายละเอียด, สถานที่..."
+          class="flex-1 px-3 py-2 rounded-lg text-sm">
+        <select id="categoryFilter" onchange="renderFullList()" class="px-2.5 py-2 rounded-lg text-xs max-w-[150px] truncate">
+          <option value="all">ทุกประเภท</option>
+        </select>
+      </div>
+
+      <div class="flex gap-1 overflow-x-auto pb-0.5 text-xs">
+        <button type="button" onclick="setListStatusFilter('all')" id="flt_all" class="flt-btn px-2.5 py-1 rounded-lg font-semibold bg-blue-600 text-white shrink-0">ทั้งหมด</button>
+        <button type="button" onclick="setListStatusFilter('unchecked')" id="flt_unchecked" class="flt-btn px-2.5 py-1 rounded-lg bg-slate-800 text-amber-300 border border-slate-700 shrink-0">⏳ รอตรวจ</button>
+        <button type="button" onclick="setListStatusFilter('checked')" id="flt_checked" class="flt-btn px-2.5 py-1 rounded-lg bg-slate-800 text-emerald-300 border border-slate-700 shrink-0">✅ ตรวจแล้ว</button>
+        <button type="button" onclick="setListStatusFilter('usable')" id="flt_usable" class="flt-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 shrink-0">ใช้ได้</button>
+        <button type="button" onclick="setListStatusFilter('damaged')" id="flt_damaged" class="flt-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 shrink-0">ชำรุด/เสื่อม</button>
+        <button type="button" onclick="setListStatusFilter('missing')" id="flt_missing" class="flt-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 shrink-0">ไม่พบ/สูญไป</button>
+        <button type="button" onclick="setListStatusFilter('unlisted')" id="flt_unlisted" class="flt-btn px-2.5 py-1 rounded-lg bg-slate-800 text-rose-300 border border-slate-700 shrink-0">⚠️ นอกบัญชี</button>
+      </div>
+    </div>
+
+    <div id="fullListContainer" class="flex-1 min-h-0 overflow-y-auto space-y-2 pb-12 pr-0.5"></div>
+  </div>
+
+  <!-- ==========================================
+       TAB 3: SUMMARY & EXPORT (สรุปผล & ส่งออก Excel)
+       ========================================== -->
+  <div id="summarySection" class="hidden flex-1 min-h-0 overflow-y-auto space-y-3 pb-12 pr-0.5">
+    <!-- การ์ดความคืบหน้าภาพรวม -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg">
+      <div class="flex items-center justify-between mb-2">
+        <div>
+          <h3 class="text-sm font-bold text-white">📈 ความคืบหน้าการตรวจสอบพัสดุ</h3>
+          <p class="text-xs text-slate-400" id="summarySheetSubtitle">หมวด: ครุภัณฑ์กองช่าง</p>
+        </div>
+        <span id="summaryPercentBadge" class="text-lg font-extrabold text-emerald-400">0%</span>
+      </div>
+      <div class="w-full h-3 bg-slate-800 rounded-full overflow-hidden mb-3 border border-slate-700">
+        <div id="summaryProgressBar" class="h-full bg-gradient-to-r from-blue-500 to-emerald-400 transition-all duration-300" style="width: 0%"></div>
+      </div>
+
+      <!-- ตารางสรุปแยกตามสถานะ 6 ช่องตามแบบฟอร์มราชการ -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+        <div class="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-800/50 flex justify-between items-center">
+          <span class="text-emerald-300">✅ มี - ใช้ได้</span>
+          <span id="sumUsable" class="font-bold text-sm text-white">0</span>
+        </div>
+        <div class="p-2.5 rounded-lg bg-amber-950/40 border border-amber-800/50 flex justify-between items-center">
+          <span class="text-amber-300">🔧 มี - ชำรุด</span>
+          <span id="sumDamaged" class="font-bold text-sm text-white">0</span>
+        </div>
+        <div class="p-2.5 rounded-lg bg-orange-950/40 border border-orange-800/50 flex justify-between items-center">
+          <span class="text-orange-300">⏳ มี - เสื่อมสภาพ</span>
+          <span id="sumDeteriorated" class="font-bold text-sm text-white">0</span>
+        </div>
+        <div class="p-2.5 rounded-lg bg-purple-950/40 border border-purple-800/50 flex justify-between items-center">
+          <span class="text-purple-300">📦 ไม่จำเป็นใช้</span>
+          <span id="sumUnneeded" class="font-bold text-sm text-white">0</span>
+        </div>
+        <div class="p-2.5 rounded-lg bg-red-950/40 border border-red-800/50 flex justify-between items-center">
+          <span class="text-red-300">❓ ไม่พบ</span>
+          <span id="sumMissing" class="font-bold text-sm text-white">0</span>
+        </div>
+        <div class="p-2.5 rounded-lg bg-rose-950/40 border border-rose-800/50 flex justify-between items-center">
+          <span class="text-rose-300">❌ สูญไป</span>
+          <span id="sumLost" class="font-bold text-sm text-white">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- การ์ดส่งออกไฟล์ Excel ต้นฉบับส่งกองคลัง -->
+    <div class="bg-slate-900 border border-emerald-700/60 rounded-xl p-4 space-y-3 shadow-lg">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <h3 class="text-sm font-bold text-emerald-300 flex items-center gap-1.5">
+          <span>📥</span> <span>ส่งออกไฟล์ Excel ชุดตารางต้นฉบับ (ส่งคืนกองคลัง)</span>
+        </h3>
+        <span class="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[10px] font-bold">ฟอร์แมตตรงต้นฉบับ 100%</span>
+      </div>
+      <p class="text-xs text-slate-300 leading-relaxed">
+        ระบบจะเขียนผลการตรวจสอบลงใน <b>แม่แบบไฟล์ Excel ต้นฉบับของกองคลัง</b> โดยคงการผสานเซลล์หัวตาราง 3 ชั้น (Row 1–5) และซ่อนคอลัมน์รหัสระบบ (Col B–E) เหมือนไฟล์เดิมทุกประการ พร้อมลงเครื่องหมาย <b class="text-emerald-400">/</b> ในช่องผลการตรวจสอบ (Col K–P), ช่อง <b>ใช้ประจำที่ (Col Q)</b> และ <b>หมายเหตุ (Col S)</b>
+      </p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+        <button type="button" onclick="exportToExcel()"
+          class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] text-white font-bold text-sm shadow-lg flex items-center justify-center gap-2 transition">
+          <span>📊</span> <span>ดาวน์โหลดไฟล์ Excel ส่งกองคลัง (.xlsx)</span>
+        </button>
+
+        <button type="button" onclick="openUnlistedModal('')"
+          class="w-full py-3 px-4 rounded-xl bg-rose-900/70 hover:bg-rose-800 border border-rose-600/60 text-rose-100 font-bold text-sm shadow flex items-center justify-center gap-2 transition">
+          <span>➕</span> <span>เพิ่มพัสดุนอกบัญชี / ตกหล่น</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ตัวอย่างตารางแบบฟอร์มราชการต้นฉบับ (สำหรับตรวจสอบก่อนส่งกองคลัง) -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-2.5 shadow-lg">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+            <span>📑</span> <span>ตัวอย่างตารางบัญชีพัสดุ (รูปแบบเดียวกับไฟล์ส่งกองคลัง)</span>
+          </h3>
+          <p class="text-[11px] text-slate-400">แสดงหัวตารางและคอลัมน์ตามแบบฟอร์มจริง (แตะที่แถวเพื่อแก้ไขผลตรวจได้ทันที)</p>
+        </div>
+        <select id="officialTableFilter" onchange="renderOfficialTablePreview()" class="px-2.5 py-1.5 rounded-lg text-xs">
+          <option value="all">แสดงทั้งหมด</option>
+          <option value="checked">เฉพาะที่ตรวจแล้ว</option>
+          <option value="unchecked">เฉพาะที่รอตรวจ</option>
+        </select>
+      </div>
+
+      <div class="overflow-x-auto rounded-lg border border-slate-700 max-h-[380px] overflow-y-auto">
+        <table class="w-full text-[11px] text-left border-collapse">
+          <thead class="bg-slate-800 text-slate-200 sticky top-0 z-10 text-center font-bold">
+            <tr>
+              <th rowspan="2" class="border border-slate-700 px-1.5 py-1">ลำดับ</th>
+              <th rowspan="2" class="border border-slate-700 px-2 py-1 whitespace-nowrap">วัน/เดือน/ปี</th>
+              <th rowspan="2" class="border border-slate-700 px-2 py-1 whitespace-nowrap">เลขที่หรือรหัส</th>
+              <th rowspan="2" class="border border-slate-700 px-2 py-1 min-w-[130px]">ชื่อพัสดุ</th>
+              <th rowspan="2" class="border border-slate-700 px-2 py-1 min-w-[160px]">รายละเอียด</th>
+              <th colspan="6" class="border border-slate-700 px-1 py-1 bg-slate-800/90 text-emerald-300">ผลการตรวจสอบ</th>
+              <th rowspan="2" class="border border-slate-700 px-2 py-1 whitespace-nowrap">ใช้ประจำที่</th>
+              <th rowspan="2" class="border border-slate-700 px-2 py-1 whitespace-nowrap">เจ้าของงบ</th>
+              <th rowspan="2" class="border border-slate-700 px-2 py-1 min-w-[100px]">หมายเหตุ</th>
+            </tr>
+            <tr class="text-[10px] bg-slate-800/95">
+              <th class="border border-slate-700 px-1 py-1 text-emerald-300">มี<br>ใช้ได้</th>
+              <th class="border border-slate-700 px-1 py-1 text-amber-300">มี<br>ชำรุด</th>
+              <th class="border border-slate-700 px-1 py-1 text-orange-300">มี<br>เสื่อมฯ</th>
+              <th class="border border-slate-700 px-1 py-1 text-purple-300">ไม่จำ<br>เป็นใช้</th>
+              <th class="border border-slate-700 px-1 py-1 text-red-300">ไม่พบ</th>
+              <th class="border border-slate-700 px-1 py-1 text-rose-300">สูญไป</th>
+            </tr>
+          </thead>
+          <tbody id="officialTableBody" class="divide-y divide-slate-800 bg-slate-950/60">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- การ์ดนำเข้าไฟล์ Excel ใหม่ หรือ สำรองข้อมูล -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3 shadow-lg">
+      <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+        <span>📂</span> <span>อัปเดตไฟล์บัญชีพัสดุ / สำรองข้อมูล</span>
+      </h3>
+      <div class="grid grid-cols-2 gap-2">
+        <label class="cursor-pointer py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 text-center transition">
+          <span>📤 นำเข้าไฟล์ Excel (.xlsx)</span>
+          <input type="file" accept=".xlsx,.xls" class="hidden" onchange="importExcelFile(this)">
+        </label>
+        <button type="button" onclick="exportJsonBackup()"
+          class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+          <span>💾 สำรองข้อมูล (.json)</span>
+        </button>
+      </div>
+      <div class="flex justify-between items-center pt-2 border-t border-slate-800">
+        <label class="cursor-pointer text-xs text-blue-400 hover:underline">
+          <span>🔄 กู้คืนจากไฟล์สำรอง (.json)</span>
+          <input type="file" accept=".json" class="hidden" onchange="importJsonBackup(this)">
+        </label>
+        <button type="button" onclick="clearAllInspectionData()" class="text-xs text-red-400 hover:text-red-300">
+          🗑️ ล้างผลการตรวจทั้งหมด
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL 1: INSPECT ITEM (บันทึกผลการตรวจสอบรายชิ้น)
+       ========================================== -->
+  <div id="inspectModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-2 sm:p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg max-h-[92dvh] flex flex-col overflow-hidden shadow-2xl">
+      <!-- Modal Header -->
+      <div class="p-3.5 bg-slate-800/80 border-b border-slate-700 flex items-start justify-between gap-2 shrink-0">
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5 mb-0.5">
+            <span id="mdlSeqBadge" class="px-2 py-0.5 rounded bg-blue-600 text-white text-[11px] font-bold">ลำดับ 1</span>
+            <span id="mdlCodeBadge" class="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-mono font-bold">000-00-0000</span>
+          </div>
+          <h3 id="mdlItemName" class="text-base font-bold text-white leading-snug break-words">ชื่อพัสดุ</h3>
+        </div>
+        <button type="button" onclick="closeInspectModal()" class="p-1.5 px-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold shrink-0">✕</button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-3.5 overflow-y-auto space-y-3 flex-1">
+        <!-- ข้อมูลอ้างอิงจากบัญชี -->
+        <div class="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-xs space-y-1 text-slate-300">
+          <div><span class="text-slate-500">ประเภท:</span> <span id="mdlCategory" class="font-medium text-slate-200">-</span></div>
+          <div><span class="text-slate-500">รหัสเต็ม:</span> <span id="mdlFullCode" class="font-mono text-slate-300">-</span></div>
+          <div><span class="text-slate-500">ได้มาเมื่อ:</span> <span id="mdlDate">-</span></div>
+          <div><span class="text-slate-500">รายละเอียด:</span> <span id="mdlDetail" class="text-slate-200 whitespace-pre-line">-</span></div>
+        </div>
+
+        <!-- เลือกผลการตรวจสอบ 6 สถานะ -->
+        <div>
+          <label class="block text-xs font-bold text-blue-300 mb-1.5">1. เลือกผลการตรวจสอบพัสดุ *</label>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <button type="button" onclick="selectModalStatus('usable')" id="stBtn_usable"
+              class="status-btn py-2.5 px-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold flex flex-col items-center gap-1">
+              <span class="text-base">✅</span>
+              <span>มี • ใช้ได้</span>
+            </button>
+            <button type="button" onclick="selectModalStatus('damaged')" id="stBtn_damaged"
+              class="status-btn py-2.5 px-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold flex flex-col items-center gap-1">
+              <span class="text-base">🔧</span>
+              <span>มี • ชำรุด</span>
+            </button>
+            <button type="button" onclick="selectModalStatus('deteriorated')" id="stBtn_deteriorated"
+              class="status-btn py-2.5 px-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold flex flex-col items-center gap-1">
+              <span class="text-base">⏳</span>
+              <span>มี • เสื่อมสภาพ</span>
+            </button>
+            <button type="button" onclick="selectModalStatus('unneeded')" id="stBtn_unneeded"
+              class="status-btn py-2.5 px-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold flex flex-col items-center gap-1">
+              <span class="text-base">📦</span>
+              <span>ไม่จำเป็นใช้</span>
+            </button>
+            <button type="button" onclick="selectModalStatus('missing')" id="stBtn_missing"
+              class="status-btn py-2.5 px-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold flex flex-col items-center gap-1">
+              <span class="text-base">❓</span>
+              <span>ไม่พบ</span>
+            </button>
+            <button type="button" onclick="selectModalStatus('lost')" id="stBtn_lost"
+              class="status-btn py-2.5 px-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold flex flex-col items-center gap-1">
+              <span class="text-base">❌</span>
+              <span>สูญไป</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ใช้ประจำที่ / สถานที่ตั้ง -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">2. ใช้ประจำที่ / สถานที่พบพัสดุ</label>
+          <input type="text" id="mdlLocation" list="locationHistoryList"
+            placeholder="เช่น ห้องกองช่าง, โรงจอดรถ, หมู่ 3, สวนใหญ่..."
+            class="w-full px-3 py-2 rounded-xl text-sm">
+          <!-- ปุ่มจิ้มเลือกสถานที่ด่วน -->
+          <div id="mdlLocationQuickBtns" class="flex flex-wrap gap-1.5 mt-2">
+            <button type="button" onclick="setModalLocation('กองช่าง')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-blue-900/60 border border-slate-700 hover:border-blue-500/60 text-slate-300 hover:text-white text-[11px] transition">📍 กองช่าง</button>
+            <button type="button" onclick="setModalLocation('ห้องสำนักงานกองช่าง')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-blue-900/60 border border-slate-700 hover:border-blue-500/60 text-slate-300 hover:text-white text-[11px] transition">📍 ห้องสำนักงาน</button>
+            <button type="button" onclick="setModalLocation('โรงจอดรถ อบต.')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-blue-900/60 border border-slate-700 hover:border-blue-500/60 text-slate-300 hover:text-white text-[11px] transition">📍 โรงจอดรถ</button>
+            <button type="button" onclick="setModalLocation('ห้องเก็บเครื่องมือ')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-blue-900/60 border border-slate-700 hover:border-blue-500/60 text-slate-300 hover:text-white text-[11px] transition">📍 ห้องเก็บเครื่องมือ</button>
+            <button type="button" onclick="setModalLocation('วัดไทยเจริญ')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-blue-900/60 border border-slate-700 hover:border-blue-500/60 text-slate-300 hover:text-white text-[11px] transition">📍 วัดไทยเจริญ</button>
+            <button type="button" onclick="setModalLocation('วัดโพธิ์เอน')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-blue-900/60 border border-slate-700 hover:border-blue-500/60 text-slate-300 hover:text-white text-[11px] transition">📍 วัดโพธิ์เอน</button>
+            <button type="button" onclick="setModalLocation('สวนใหญ่')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-blue-900/60 border border-slate-700 hover:border-blue-500/60 text-slate-300 hover:text-white text-[11px] transition">📍 สวนใหญ่</button>
+          </div>
+          <datalist id="locationHistoryList">
+            <option value="กองช่าง">
+            <option value="ห้องสำนักงานกองช่าง">
+            <option value="โรงจอดรถ อบต.">
+            <option value="ห้องเก็บเครื่องมือ">
+            <option value="วัดไทยเจริญ">
+            <option value="วัดโพธิ์เอน">
+            <option value="วัดอุทยาน">
+            <option value="สวนใหญ่">
+            <option value="หมู่ 1">
+            <option value="หมู่ 2">
+            <option value="หมู่ 3">
+            <option value="หมู่ 4">
+            <option value="หมู่ 5">
+            <option value="หมู่ 6">
+          </datalist>
+        </div>
+
+        <!-- หมายเหตุ -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">3. หมายเหตุเพิ่มเติม</label>
+          <textarea id="mdlNote" rows="2" placeholder="ระบุอาการชำรุด, ผู้ดูแล หรือรายละเอียดเพิ่มเติม (ถ้ามี)" class="w-full px-3 py-2 rounded-xl text-sm"></textarea>
+        </div>
+
+        <!-- รูปถ่ายพัสดุ -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">4. รูปถ่ายพัสดุ (อ้างอิงการตรวจ)</label>
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <label for="mdlCameraInput" class="cursor-pointer bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2.5 px-3 rounded-xl text-white text-xs font-semibold flex items-center justify-center gap-1.5 text-center transition">
+              <span>📷</span> <span>ถ่ายรูปพัสดุ</span>
+            </label>
+            <label for="mdlGalleryInput" class="cursor-pointer bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2.5 px-3 rounded-xl text-white text-xs font-semibold flex items-center justify-center gap-1.5 text-center transition">
+              <span>🖼️</span> <span>เลือกจากคลังภาพ</span>
+            </label>
+          </div>
+          <input type="file" id="mdlCameraInput" accept="image/*" capture="environment" style="position:absolute;width:1px;height:1px;opacity:0;z-index:-1;" onchange="handleModalPhotoPicked(this)">
+          <input type="file" id="mdlGalleryInput" accept="image/*" style="position:absolute;width:1px;height:1px;opacity:0;z-index:-1;" onchange="handleModalPhotoPicked(this)">
+
+          <!-- พรีวิวรูปภาพ -->
+          <div id="mdlPhotoPreviewWrap" class="hidden p-2 bg-slate-800/90 border border-blue-500/40 rounded-xl flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <img id="mdlPhotoPreviewImg" src="" onclick="previewFullImage(this.src)" class="w-14 h-14 object-cover rounded-lg border border-slate-600 cursor-pointer shrink-0" alt="รูปพัสดุ">
+              <div class="text-xs text-slate-300 truncate">
+                <div class="font-bold text-blue-400">แนบรูปถ่ายแล้ว</div>
+                <div class="text-[11px] text-slate-400">แตะที่รูปเพื่อขยายดูเต็มจอ</div>
+              </div>
+            </div>
+            <button type="button" onclick="removeModalPhoto()" class="px-2.5 py-1.5 rounded-lg bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-800 text-xs font-semibold shrink-0">
+              ✕ ลบรูป
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-3 bg-slate-800/90 border-t border-slate-700 flex items-center gap-2 shrink-0">
+        <button type="button" id="mdlClearCheckBtn" onclick="clearItemInspection()"
+          class="hidden py-2.5 px-3 rounded-xl bg-red-950/70 hover:bg-red-900 border border-red-800 text-red-300 text-xs font-semibold transition">
+          ล้างผลตรวจ
+        </button>
+        <button type="button" onclick="closeInspectModal()"
+          class="py-2.5 px-4 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs sm:text-sm font-semibold transition">
+          ยกเลิก
+        </button>
+        <button type="button" id="mdlSaveBtn" onclick="saveModalInspection()"
+          class="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white text-sm font-bold shadow-lg transition">
+          💾 บันทึกผลการตรวจ
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL 2: UNLISTED ASSET (บันทึกพัสดุนอกบัญชี / ตกหล่น)
+       ========================================== -->
+  <div id="unlistedModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-2 sm:p-4">
+    <div class="bg-slate-900 border border-rose-500/50 rounded-2xl w-full max-w-lg max-h-[92dvh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="p-3.5 bg-rose-950/50 border-b border-rose-800/60 flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-bold text-rose-200 flex items-center gap-1.5">
+            <span>⚠️</span> <span>บันทึกพัสดุนอกบัญชี / ไม่พบในระบบ</span>
+          </h3>
+          <p class="text-[11px] text-rose-300/80">ใช้สำหรับจดบันทึกพัสดุที่พบหน้างานแต่ไม่มีเลขในบัญชีปี 2569</p>
+        </div>
+        <button type="button" onclick="closeUnlistedModal()" class="p-1.5 px-2.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-bold">✕</button>
+      </div>
+
+      <div class="p-3.5 overflow-y-auto space-y-3 flex-1">
+        <input type="hidden" id="ulEditId" value="">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">เลขพัสดุที่พบติดอยู่กับของ (ถ้ามี)</label>
+          <input type="text" id="ulCode" placeholder="เช่น 401-xx-xxxx หรือ ไม่มีเลขครุภัณฑ์" class="w-full px-3 py-2 rounded-xl text-sm font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">ชื่อพัสดุ / ลักษณะสิ่งของ *</label>
+          <input type="text" id="ulName" placeholder="เช่น โต๊ะทำงานไม้, เครื่องตัดหญ้า, ปั๊มน้ำ..." class="w-full px-3 py-2 rounded-xl text-sm">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">สภาพพัสดุ</label>
+            <select id="ulStatus" class="w-full px-3 py-2 rounded-xl text-sm">
+              <option value="usable">✅ ใช้ได้</option>
+              <option value="damaged">🔧 ชำรุด</option>
+              <option value="deteriorated">⏳ เสื่อมสภาพ</option>
+              <option value="unneeded">📦 ไม่จำเป็นใช้</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">พบอยู่ที่บริเวณ</label>
+            <input type="text" id="ulLocation" list="locationHistoryList" placeholder="เช่น ห้องเก็บของ..." class="w-full px-3 py-2 rounded-xl text-sm">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">หมายเหตุ / รายละเอียด</label>
+          <textarea id="ulNote" rows="2" placeholder="ระบุยี่ห้อ สี หรือสาเหตุที่คาดว่าตกหล่น..." class="w-full px-3 py-2 rounded-xl text-sm"></textarea>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">รูปถ่ายพัสดุนอกบัญชี</label>
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <label for="ulCameraInput" class="cursor-pointer bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2 px-3 rounded-xl text-white text-xs font-semibold flex items-center justify-center gap-1.5 text-center">
+              <span>📷</span> <span>ถ่ายรูป</span>
+            </label>
+            <label for="ulGalleryInput" class="cursor-pointer bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2 px-3 rounded-xl text-white text-xs font-semibold flex items-center justify-center gap-1.5 text-center">
+              <span>🖼️</span> <span>เลือกจากคลังภาพ</span>
+            </label>
+          </div>
+          <input type="file" id="ulCameraInput" accept="image/*" capture="environment" style="position:absolute;width:1px;height:1px;opacity:0;z-index:-1;" onchange="handleUlPhotoPicked(this)">
+          <input type="file" id="ulGalleryInput" accept="image/*" style="position:absolute;width:1px;height:1px;opacity:0;z-index:-1;" onchange="handleUlPhotoPicked(this)">
+          <div id="ulPhotoPreviewWrap" class="hidden p-2 bg-slate-800 rounded-xl flex items-center justify-between">
+            <img id="ulPhotoPreviewImg" src="" class="w-12 h-12 object-cover rounded-lg border border-slate-600">
+            <button type="button" onclick="removeUlPhoto()" class="text-xs text-red-400 px-2 py-1">✕ ลบรูป</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-3 bg-slate-800/90 border-t border-slate-700 flex gap-2">
+        <button type="button" onclick="closeUnlistedModal()" class="py-2.5 px-4 rounded-xl bg-slate-700 text-slate-200 text-xs font-semibold">ยกเลิก</button>
+        <button type="button" onclick="saveUnlistedItem()" class="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold shadow-lg">💾 บันทึกพัสดุนอกบัญชี</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL 3: CLOUD SETTINGS (Google Sheets Sync)
+       ========================================== -->
+  <div id="cloudModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-3">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-4 space-y-3 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+        <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+          <span>☁️</span> <span>เชื่อมต่อ Google Sheets (ออนไลน์ทุกที่)</span>
+        </h3>
+        <button type="button" onclick="closeCloudModal()" class="text-slate-400 hover:text-white text-xs font-bold px-2 py-1">✕</button>
+      </div>
+      <p class="text-xs text-slate-400 leading-relaxed">
+        แอปนี้บันทึกข้อมูลลงในเครื่องอัตโนมัติ (ใช้งานออฟไลน์ได้ทันที) และหากต้องการให้ข้อมูลซิงค์ออนไลน์ร่วมกันหลายเครื่องเหมือนแอปตรวจไฟทาง ให้นำโค้ดในไฟล์ <code class="text-amber-300">Code.gs.txt</code> ไปวางใน Google Apps Script แล้วนำ <b>Web App URL</b> มาใส่ด้านล่างครับ
+      </p>
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Google Apps Script Web App URL</label>
+        <input type="url" id="gasUrlInput" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-3 py-2 rounded-xl text-xs font-mono">
+      </div>
+      <div class="flex flex-wrap gap-2 pt-1">
+        <button type="button" onclick="saveCloudConfig()" class="flex-1 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold">
+          💾 บันทึก URL
+        </button>
+        <button type="button" onclick="pullFromCloud()" class="py-2.5 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold">
+          ⬇️ ดึงข้อมูลล่าสุด
+        </button>
+        <button type="button" onclick="pushAllToCloud()" class="py-2.5 px-3 rounded-xl bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold">
+          ⬆️ ส่งข้อมูลขึ้น Cloud
+        </button>
+      </div>
+      <div id="cloudSyncMsg" class="text-xs text-center text-slate-400 pt-1"></div>
+    </div>
+  </div>
+
+  <!-- IMAGE LIGHTBOX -->
+  <div id="lightboxModal" onclick="this.classList.add('hidden')" class="fixed inset-0 bg-black/90 z-50 hidden items-center justify-center p-4">
+    <img id="lightboxImg" src="" class="max-w-full max-h-full rounded-xl shadow-2xl border border-slate-700" alt="ภาพขยาย">
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toastBox" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs sm:text-sm font-bold shadow-2xl border border-emerald-400 transition-all">
+    ✅ บันทึกข้อมูลเรียบร้อย
+  </div>
+
+  <script>
+    // =====================================================
+    // STATE & INITIALIZATION
+    // =====================================================
+    const STORAGE_KEY_INSPECTIONS = 'bkk_asset_inspections_2569_v1';
+    const STORAGE_KEY_UNLISTED    = 'bkk_asset_unlisted_2569_v1';
+    const STORAGE_KEY_CUSTOM_DATA = 'bkk_asset_custom_sheets_2569_v1';
+    const STORAGE_KEY_GAS_URL     = 'bkk_asset_gas_url_2569';
+
+    const STATUS_META = {
+      usable:       { label: 'มี • ใช้ได้',       short: 'ใช้ได้',       icon: '✅', badgeCls: 'bg-emerald-950/90 text-emerald-300 border-emerald-600/60', colOffset: 0 },
+      damaged:      { label: 'มี • ชำรุด',       short: 'ชำรุด',       icon: '🔧', badgeCls: 'bg-amber-950/90 text-amber-300 border-amber-600/60',     colOffset: 1 },
+      deteriorated: { label: 'มี • เสื่อมสภาพ',   short: 'เสื่อมสภาพ',   icon: '⏳', badgeCls: 'bg-orange-950/90 text-orange-300 border-orange-600/60',   colOffset: 2 },
+      unneeded:     { label: 'มี • ไม่จำเป็นใช้', short: 'ไม่จำเป็นใช้', icon: '📦', badgeCls: 'bg-purple-950/90 text-purple-300 border-purple-600/60',   colOffset: 3 },
+      missing:      { label: 'ไม่พบ',            short: 'ไม่พบ',       icon: '❓', badgeCls: 'bg-red-950/90 text-red-300 border-red-600/60',           colOffset: 4 },
+      lost:         { label: 'สูญไป',            short: 'สูญไป',       icon: '❌', badgeCls: 'bg-rose-950/90 text-rose-300 border-rose-600/60',         colOffset: 5 }
+    };
+
+    let currentSheetKey = 'sheet1'; // 'sheet1' = ช่าง (271), 'sheet2' = ทีดินและสิ่งปลูกสร้าง (223)
+    let assetsData = { sheet1: [], sheet2: [] };
+    let inspectionsMap = {}; // { [item.id]: { status, location, note, imageUrl, checkedAt } }
+    let unlistedItems = [];  // [ { id, code, name, status, location, note, imageUrl, checkedAt } ]
+    let listStatusFilter = 'all';
+
+    // Modal state
+    let activeModalItemId = null;
+    let activeModalStatus = 'usable';
+    let activeModalImageData = '';
+    let activeUlImageData = '';
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadInitialState();
+      populateCategoryFilter();
+      updateAllStats();
+      renderSearchArea();
+      renderFullList();
+
+      // Auto focus search input on desktop
+      const searchEl = document.getElementById('mainSearchInput');
+      if (searchEl && window.innerWidth > 640) {
+        searchEl.focus();
+      }
+
+      // If Google Apps Script URL is configured, pull latest in background
+      const gasUrl = localStorage.getItem(STORAGE_KEY_GAS_URL);
+      if (gasUrl) {
+        document.getElementById('gasUrlInput').value = gasUrl;
+        pullFromCloud(true);
+      }
+    });
+
+    function loadInitialState() {
+      // Load base data from assets_data.js or custom imported Excel
+      const customDataRaw = localStorage.getItem(STORAGE_KEY_CUSTOM_DATA);
+      if (customDataRaw) {
+        try {
+          assetsData = JSON.parse(customDataRaw);
+        } catch (e) {
+          assetsData = window.INITIAL_ASSETS_DATA || { sheet1: [], sheet2: [] };
+        }
+      } else if (window.INITIAL_ASSETS_DATA) {
+        assetsData = window.INITIAL_ASSETS_DATA;
+      }
+
+      // Load saved inspections
+      try {
+        inspectionsMap = JSON.parse(localStorage.getItem(STORAGE_KEY_INSPECTIONS) || '{}');
+      } catch (e) {
+        inspectionsMap = {};
+      }
+
+      // Load unlisted items
+      try {
+        unlistedItems = JSON.parse(localStorage.getItem(STORAGE_KEY_UNLISTED) || '[]');
+      } catch (e) {
+        unlistedItems = [];
+      }
+    }
+
+    function saveLocalState() {
+      localStorage.setItem(STORAGE_KEY_INSPECTIONS, JSON.stringify(inspectionsMap));
+      localStorage.setItem(STORAGE_KEY_UNLISTED, JSON.stringify(unlistedItems));
+      updateAllStats();
+    }
+
+    function getCurrentSheetItems() {
+      return assetsData[currentSheetKey] || [];
+    }
+
+    function getItemWithInspection(item) {
+      const rec = inspectionsMap[item.id];
+      if (!rec) return item;
+      return Object.assign({}, item, {
+        status: rec.status || '',
+        location: rec.location !== undefined && rec.location !== '' ? rec.location : item.location,
+        note: rec.note !== undefined && rec.note !== '' ? rec.note : item.note,
+        imageUrl: rec.imageUrl || '',
+        checkedAt: rec.checkedAt || ''
+      });
+    }
+
+    // =====================================================
+    // SHEET MODE SWITCHING ("ช่าง" <-> "ที่ดินและสิ่งปลูกสร้าง")
+    // =====================================================
+    window.toggleSheetMode = function() {
+      currentSheetKey = (currentSheetKey === 'sheet1') ? 'sheet2' : 'sheet1';
+      const isSheet1 = (currentSheetKey === 'sheet1');
+      document.getElementById('activeSheetLabel').innerText = isSheet1
+        ? 'ครุภัณฑ์กองช่าง (271 รายการ)'
+        : 'ที่ดินและสิ่งปลูกสร้าง (223 รายการ)';
+      document.getElementById('sheetSwitchText').innerText = isSheet1
+        ? 'ดูที่ดิน/สิ่งปลูกสร้าง'
+        : 'ดูครุภัณฑ์กองช่าง';
+      document.getElementById('summarySheetSubtitle').innerText = isSheet1
+        ? 'หมวด: ครุภัณฑ์กองช่าง (ชีต "ช่าง")'
+        : 'หมวด: ที่ดิน อาคาร และสิ่งปลูกสร้าง';
+
+      populateCategoryFilter();
+      updateAllStats();
+      renderSearchArea();
+      renderFullList();
+      showToast(isSheet1 ? 'สลับไปยังชีต "ช่าง" แล้ว' : 'สลับไปยังชีต "ที่ดินและสิ่งปลูกสร้าง" แล้ว');
+    };
+
+    // =====================================================
+    // TABS & STATS
+    // =====================================================
+    window.switchTab = function(tab) {
+      const checkSec = document.getElementById('checkSection');
+      const listSec = document.getElementById('listSection');
+      const sumSec = document.getElementById('summarySection');
+
+      checkSec.classList.add('hidden');
+      checkSec.classList.remove('flex');
+      listSec.classList.add('hidden');
+      listSec.classList.remove('flex');
+      sumSec.classList.add('hidden');
+
+      const baseBtnCls = "py-2 px-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800 text-xs sm:text-sm flex items-center justify-center gap-1.5 transition";
+      const activeBtnCls = "py-2 px-2 rounded-lg font-bold text-white bg-blue-600 shadow text-xs sm:text-sm flex items-center justify-center gap-1.5 transition";
+
+      document.getElementById('tabCheckBtn').className = baseBtnCls;
+      document.getElementById('tabListBtn').className = baseBtnCls;
+      document.getElementById('tabSummaryBtn').className = baseBtnCls;
+
+      if (tab === 'check') {
+        checkSec.classList.remove('hidden');
+        checkSec.classList.add('flex');
+        document.getElementById('tabCheckBtn').className = activeBtnCls;
+        renderSearchArea();
+      } else if (tab === 'list') {
+        listSec.classList.remove('hidden');
+        listSec.classList.add('flex');
+        document.getElementById('tabListBtn').className = activeBtnCls;
+        renderFullList();
+      } else if (tab === 'summary') {
+        sumSec.classList.remove('hidden');
+        document.getElementById('tabSummaryBtn').className = activeBtnCls;
+        updateAllStats();
+        if (typeof renderOfficialTablePreview === 'function') renderOfficialTablePreview();
+      }
+    };
+
+    window.jumpToFilter = function(filterType) {
+      switchTab('list');
+      setListStatusFilter(filterType);
+    };
+
+    function updateAllStats() {
+      const items = getCurrentSheetItems();
+      const total = items.length;
+      let checked = 0;
+      const counts = { usable: 0, damaged: 0, deteriorated: 0, unneeded: 0, missing: 0, lost: 0 };
+
+      items.forEach(raw => {
+        const rec = inspectionsMap[raw.id];
+        if (rec && rec.status && STATUS_META[rec.status]) {
+          checked++;
+          counts[rec.status]++;
+        }
+      });
+
+      const pending = total - checked;
+      const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+
+      document.getElementById('statTotal').innerText = total;
+      document.getElementById('statChecked').innerText = checked;
+      document.getElementById('statPending').innerText = pending;
+      document.getElementById('statUnlisted').innerText = unlistedItems.length;
+
+      document.getElementById('summaryPercentBadge').innerText = `${pct}% (${checked}/${total})`;
+      document.getElementById('summaryProgressBar').style.width = `${pct}%`;
+
+      document.getElementById('sumUsable').innerText = counts.usable;
+      document.getElementById('sumDamaged').innerText = counts.damaged;
+      document.getElementById('sumDeteriorated').innerText = counts.deteriorated;
+      document.getElementById('sumUnneeded').innerText = counts.unneeded;
+      document.getElementById('sumMissing').innerText = counts.missing;
+      document.getElementById('sumLost').innerText = counts.lost;
+      if (typeof renderOfficialTablePreview === 'function') renderOfficialTablePreview();
+    }
+
+    // =====================================================
+    // SEARCH & INSTANT VERIFICATION (TAB 1)
+    // =====================================================
+    window.handleSearchInput = function() {
+      const q = document.getElementById('mainSearchInput').value.trim();
+      const clearBtn = document.getElementById('clearSearchBtn');
+      if (q.length > 0) clearBtn.classList.remove('hidden');
+      else clearBtn.classList.add('hidden');
+      renderSearchArea();
+    };
+
+    window.clearSearch = function() {
+      const input = document.getElementById('mainSearchInput');
+      input.value = '';
+      document.getElementById('clearSearchBtn').classList.add('hidden');
+      renderSearchArea();
+      input.focus();
+    };
+
+    window.quickSearch = function(keyword) {
+      const input = document.getElementById('mainSearchInput');
+      input.value = keyword;
+      document.getElementById('clearSearchBtn').classList.remove('hidden');
+      renderSearchArea();
+    };
+
+    function normalizeCode(str) {
+      return String(str || '').toLowerCase().replace(/\s+/g, '');
+    }
+
+    function searchItemsInSheet(items, query) {
+      const q = query.toLowerCase().trim();
+      const qNorm = normalizeCode(query);
+      const scored = [];
+
+      items.forEach(raw => {
+        const item = getItemWithInspection(raw);
+        const codeNorm = normalizeCode(item.code);
+        const fullCodeNorm = normalizeCode(item.fullCode);
+        const nameLower = String(item.name || '').toLowerCase();
+        const detailLower = String(item.detail || '').toLowerCase();
+        const seqStr = String(item.seq || '').trim();
+
+        let score = 0;
+        if (codeNorm === qNorm || fullCodeNorm === qNorm || seqStr === q) {
+          score = 100; // Exact code or sequence match
+        } else if (codeNorm.startsWith(qNorm) || fullCodeNorm.startsWith(qNorm)) {
+          score = 85;
+        } else if (codeNorm.includes(qNorm) || fullCodeNorm.includes(qNorm)) {
+          score = 75;
+        } else if (nameLower === q) {
+          score = 70;
+        } else if (nameLower.startsWith(q)) {
+          score = 60;
+        } else if (nameLower.includes(q)) {
+          score = 50;
+        } else if (detailLower.includes(q)) {
+          score = 30;
+        }
+
+        if (score > 0) {
+          scored.push({ item, score });
+        }
+      });
+
+      scored.sort((a, b) => b.score - a.score || (parseInt(a.item.seq) || 0) - (parseInt(b.item.seq) || 0));
+      return scored.map(s => s.item);
+    }
+
+    window.selectFirstMatch = function() {
+      const q = document.getElementById('mainSearchInput').value.trim();
+      if (!q) return;
+      const matches = searchItemsInSheet(getCurrentSheetItems(), q);
+      if (matches.length > 0) {
+        openInspectModal(matches[0].id);
+      } else {
+        openUnlistedModal(q);
+      }
+    };
+
+    function renderSearchArea() {
+      const container = document.getElementById('searchResultsArea');
+      const badge = document.getElementById('searchCountBadge');
+      const q = document.getElementById('mainSearchInput').value.trim();
+      const currentItems = getCurrentSheetItems();
+
+      // กรณีไม่ได้พิมพ์ค้นหา: แสดงรายการที่เพิ่งตรวจล่าสุด + รายการรอตรวจลำดับต้นๆ
+      if (!q) {
+        badge.innerText = `ในบัญชี ${currentItems.length} รายการ`;
+        const recentlyChecked = currentItems
+          .map(getItemWithInspection)
+          .filter(it => it.status)
+          .slice(-5)
+          .reverse();
+
+        const nextUnchecked = currentItems
+          .map(getItemWithInspection)
+          .filter(it => !it.status)
+          .slice(0, 12);
+
+        let html = '';
+
+        html += `
+          <div class="p-3 rounded-xl bg-blue-950/30 border border-blue-800/50 text-xs text-blue-200 flex items-center justify-between gap-2">
+            <div>
+              <span class="font-bold">💡 วิธีใช้งานหน้างาน:</span> พิมพ์เลขพัสดุ (เช่น <code class="text-amber-300 font-mono">005-41-0001</code> หรือเฉพาะเลขท้าย <code class="text-amber-300 font-mono">0001</code>) หรือพิมพ์ชื่อพัสดุ ระบบจะตรวจสอบทันทีว่ามีในบัญชีหรือไม่
+            </div>
+          </div>
+        `;
+
+        if (recentlyChecked.length > 0) {
+          html += `<div class="text-xs font-bold text-emerald-400 pt-1 px-1">✅ รายการที่บันทึกผลล่าสุด</div>`;
+          recentlyChecked.forEach(item => {
+            html += buildAssetCardHtml(item, '');
+          });
+        }
+
+        html += `<div class="text-xs font-bold text-amber-400 pt-1 px-1">⏳ รายการที่รอตรวจสอบ (${nextUnchecked.length} รายการแรก)</div>`;
+        nextUnchecked.forEach(item => {
+          html += buildAssetCardHtml(item, '');
+        });
+
+        container.innerHTML = html;
+        return;
+      }
+
+      // กรณีพิมพ์ค้นหา
+      const matches = searchItemsInSheet(currentItems, q);
+
+      // ตรวจสอบว่าอยู่ในอีกชีตหนึ่งหรือไม่ (เผื่อค้นหาเลขที่อยู่ในชีตที่ดิน/สิ่งปลูกสร้าง)
+      const otherSheetKey = (currentSheetKey === 'sheet1') ? 'sheet2' : 'sheet1';
+      const otherSheetName = (otherSheetKey === 'sheet1') ? 'ครุภัณฑ์กองช่าง' : 'ที่ดินและสิ่งปลูกสร้าง';
+      const otherMatches = searchItemsInSheet(assetsData[otherSheetKey] || [], q);
+
+      if (matches.length > 0) {
+        badge.innerHTML = `<span class="text-emerald-400 font-bold">พบในระบบ ${matches.length} รายการ</span>`;
+        let html = `
+          <div class="p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-500/60 text-xs text-emerald-200 flex items-center justify-between">
+            <span class="font-bold">✅ พบพัสดุตรงกับในบัญชี ${matches.length} รายการ (แตะปุ่มสถานะเพื่อบันทึกผลได้ทันที)</span>
+          </div>
+        `;
+        matches.slice(0, 30).forEach((item, idx) => {
+          html += buildAssetCardHtml(item, q, idx === 0);
+        });
+        container.innerHTML = html;
+      } else {
+        badge.innerHTML = `<span class="text-rose-400 font-bold">❌ ไม่พบในระบบ</span>`;
+        let otherSheetNotice = '';
+        if (otherMatches.length > 0) {
+          otherSheetNotice = `
+            <div class="mt-3 p-3 rounded-xl bg-amber-950/70 border border-amber-500/60 text-left">
+              <div class="text-xs font-bold text-amber-300 mb-1">💡 แต่พบ "${escapeHtml(q)}" จำนวน ${otherMatches.length} รายการ ในหมวด "${otherSheetName}"!</div>
+              <button type="button" onclick="toggleSheetMode()" class="mt-1 w-full py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold">
+                🔄 สลับไปดูหมวด ${otherSheetName} ทันที
+              </button>
+            </div>
+          `;
+        }
+
+        container.innerHTML = `
+          <div class="not-found-card p-5 rounded-2xl bg-rose-950/40 border-2 border-rose-500/80 text-center space-y-3 shadow-xl my-2">
+            <div class="w-14 h-14 rounded-full bg-rose-900/80 border border-rose-500 flex items-center justify-center text-3xl mx-auto shadow">
+              ❌
+            </div>
+            <div>
+              <h3 class="text-base sm:text-lg font-extrabold text-rose-300">ไม่พบชื่อหรือเลขพัสดุนี้ในรายการบัญชี!</h3>
+              <p class="text-xs text-slate-300 mt-1">
+                คำค้นหา: <span class="px-2 py-0.5 rounded bg-rose-900 text-amber-300 font-mono font-bold text-sm">${escapeHtml(q)}</span>
+              </p>
+              <p class="text-[11px] text-slate-400 mt-1">
+                ไม่มีรหัสหรือชื่อพัสดุนี้ในบัญชีพัสดุประจำปี 2569 (${currentSheetKey === 'sheet1' ? 'ชีตช่าง' : 'ชีตที่ดินและสิ่งปลูกสร้าง'})
+              </p>
+            </div>
+
+            <div class="pt-2 flex flex-col sm:flex-row gap-2 justify-center">
+              <button type="button" onclick="openUnlistedModal('${escapeAttr(q)}')"
+                class="py-3 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-lg flex items-center justify-center gap-1.5 transition">
+                <span>➕</span> <span>บันทึกเป็นพัสดุนอกบัญชี / ตกหล่น</span>
+              </button>
+              <button type="button" onclick="clearSearch()"
+                class="py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs sm:text-sm border border-slate-700 transition">
+                🔍 ค้นหาเลขอื่นใหม่
+              </button>
+            </div>
+            ${otherSheetNotice}
+          </div>
+        `;
+      }
+    }
+
+    // สร้างการ์ดพัสดุ (พร้อมปุ่มกดเลือกสถานะด่วนในตัว หรือเปิด Modal รายละเอียด)
+    function buildAssetCardHtml(item, highlightQuery, isTopMatch = false) {
+      const st = item.status ? STATUS_META[item.status] : null;
+      const borderCls = st
+        ? 'border-emerald-600/50 bg-slate-900/95'
+        : (isTopMatch ? 'border-blue-500/80 bg-slate-900 ring-1 ring-blue-500/30' : 'border-slate-800 bg-slate-900/90');
+
+      const statusBadgeHtml = st
+        ? `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${st.badgeCls}">${st.icon} ${st.short}</span>`
+        : `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-800 text-amber-300 border border-slate-700">⏳ รอตรวจ</span>`;
+
+      const quickStatusButtons = Object.keys(STATUS_META).map(key => {
+        const meta = STATUS_META[key];
+        const isActive = (item.status === key);
+        const btnCls = isActive
+          ? `active-${key} text-white border-transparent font-bold`
+          : `bg-slate-800/90 hover:bg-slate-700 text-slate-300 border-slate-700`;
+        return `
+          <button type="button" onclick="event.stopPropagation(); quickSetStatus('${item.id}', '${key}')"
+            class="status-btn py-1.5 px-1.5 rounded-lg border text-[11px] flex items-center justify-center gap-1 ${btnCls}">
+            <span>${meta.icon}</span> <span>${meta.short}</span>
+          </button>
+        `;
+      }).join('');
+
+      return `
+        <div class="rounded-xl border ${borderCls} p-3 shadow-md transition hover:border-slate-600 space-y-2">
+          <!-- แถวบน: ลำดับ + รหัสครุภัณฑ์ + สถานะ -->
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex items-center gap-1.5">
+              <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-bold">
+                #${escapeHtml(item.seq || '-')}
+              </span>
+              <span class="px-2.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/40 text-amber-300 font-mono font-bold text-xs sm:text-sm">
+                ${escapeHtml(item.code || 'ไม่มีรหัส')}
+              </span>
+              <span class="text-[11px] text-slate-400 hidden sm:inline">(${escapeHtml(item.dateText || item.dateRaw || '-')})</span>
+            </div>
+            ${statusBadgeHtml}
+          </div>
+
+          <!-- ชื่อพัสดุ & รายละเอียด -->
+          <div class="cursor-pointer" onclick="openInspectModal('${item.id}')">
+            <div class="text-sm sm:text-base font-bold text-white leading-snug">
+              ${escapeHtml(item.name)}
+            </div>
+            ${item.detail ? `<div class="text-xs text-slate-400 mt-0.5 line-clamp-2">${escapeHtml(item.detail)}</div>` : ''}
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[11px] text-slate-400">
+              <span>📂 ${escapeHtml(item.subCategory || item.mainCategory || '-')}</span>
+              ${item.fullCode ? `<span class="font-mono text-slate-500">รหัสเต็ม: ${escapeHtml(item.fullCode)}</span>` : ''}
+              ${item.location ? `<span class="text-blue-300">📍 ใช้ประจำที่: ${escapeHtml(item.location)}</span>` : ''}
+              ${item.note ? `<span class="text-amber-300">💬 หมายเหตุ: ${escapeHtml(item.note)}</span>` : ''}
+            </div>
+          </div>
+
+          ${item.imageUrl ? `
+            <div class="pt-1 flex items-center gap-2">
+              <img src="${item.imageUrl}" onclick="previewFullImage(this.src)" class="w-12 h-12 object-cover rounded-lg border border-slate-600 cursor-pointer" alt="รูปพัสดุ">
+              <span class="text-[11px] text-blue-400">📷 มีรูปถ่ายแนบแล้ว (แตะเพื่อดูรูปใหญ่)</span>
+            </div>
+          ` : ''}
+
+          <!-- ปุ่มกดเลือกสถานะด่วน 6 ช่อง + ช่องใช้ประจำที่ & ปุ่มถ่ายรูป -->
+          <div class="pt-2 border-t border-slate-800/80 space-y-2">
+            <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+              ${quickStatusButtons}
+            </div>
+
+            <!-- แถวระบุ "ใช้ประจำที่" ด่วนบนการ์ด + ปุ่มถ่ายรูป/หมายเหตุ -->
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 pt-0.5" onclick="event.stopPropagation()">
+              <div class="flex items-center flex-1 bg-slate-950/90 border border-slate-700/90 rounded-lg overflow-hidden focus-within:border-blue-500">
+                <span class="px-2.5 py-1.5 bg-slate-800/90 text-blue-300 text-[11px] font-bold border-r border-slate-700 shrink-0 flex items-center gap-1">
+                  <span>📍</span> <span>ใช้ประจำที่</span>
+                </span>
+                <input type="text" list="locationHistoryList"
+                  value="${escapeAttr(item.location || '')}"
+                  placeholder="พิมพ์หรือเลือกสถานที่ตั้ง..."
+                  onchange="quickSetLocation('${item.id}', this.value)"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}"
+                  style="background:transparent !important; border:none !important; box-shadow:none !important; font-size:13px !important;"
+                  class="w-full px-2.5 py-1.5 text-xs text-white placeholder-slate-500">
+              </div>
+
+              <button type="button" onclick="openInspectModal('${item.id}')"
+                class="py-1.5 px-3 rounded-lg bg-blue-950/80 hover:bg-blue-900 border border-blue-700/60 text-blue-200 text-xs font-semibold flex items-center justify-center gap-1.5 shrink-0 transition">
+                <span>📷 / 💬</span> <span>ถ่ายรูป • หมายเหตุ</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    window.setModalLocation = function(locText) {
+      const el = document.getElementById('mdlLocation');
+      if (el) el.value = locText;
+    };
+
+    // บันทึกเฉพาะช่อง "ใช้ประจำที่" ทันทีเมื่อพิมพ์หรือเลือกจากการ์ด
+    window.quickSetLocation = function(itemId, newLoc) {
+      const raw = findRawItemById(itemId);
+      if (!raw) return;
+      const locTrimmed = String(newLoc || '').trim();
+      const existing = inspectionsMap[itemId] || {};
+      const timestamp = getThaiNowString();
+
+      inspectionsMap[itemId] = {
+        id: itemId,
+        sheet: raw.sheet,
+        rowIndex: raw.rowIndex,
+        code: raw.code,
+        name: raw.name,
+        status: existing.status || 'usable', // หากยังไม่เคยเลือกสถานะ เมื่อใส่สถานที่ตั้งให้ถือว่าตรวจพบ (มี-ใช้ได้) อัตโนมัติ
+        location: locTrimmed,
+        note: existing.note !== undefined ? existing.note : (raw.note || ''),
+        imageUrl: existing.imageUrl || '',
+        checkedAt: timestamp
+      };
+
+      // บันทึกคำสถานที่ใหม่ลงในรายการประวัติอัตโนมัติ
+      addLocationToDatalist(locTrimmed);
+
+      saveLocalState();
+      renderSearchArea();
+      renderFullList();
+      showToast(`บันทึกใช้ประจำที่ "${locTrimmed || '-'}" สำหรับ ${raw.code} แล้ว`);
+      syncSingleItemToCloud(inspectionsMap[itemId]);
+    };
+
+    function addLocationToDatalist(locText) {
+      if (!locText) return;
+      const dl = document.getElementById('locationHistoryList');
+      if (!dl) return;
+      const exists = Array.from(dl.options).some(opt => opt.value === locText);
+      if (!exists) {
+        const opt = document.createElement('option');
+        opt.value = locText;
+        dl.appendChild(opt);
+      }
+    }
+
+    // กดปุ่มสถานะด่วนจากการ์ดทันทีในคลิกเดียว
+    window.quickSetStatus = function(itemId, statusKey) {
+      const raw = findRawItemById(itemId);
+      if (!raw) return;
+      const existing = inspectionsMap[itemId] || {};
+      const timestamp = getThaiNowString();
+
+      inspectionsMap[itemId] = {
+        id: itemId,
+        sheet: raw.sheet,
+        rowIndex: raw.rowIndex,
+        code: raw.code,
+        name: raw.name,
+        status: statusKey,
+        location: existing.location !== undefined ? existing.location : (raw.location || ''),
+        note: existing.note !== undefined ? existing.note : (raw.note || ''),
+        imageUrl: existing.imageUrl || '',
+        checkedAt: timestamp
+      };
+
+      saveLocalState();
+      renderSearchArea();
+      renderFullList();
+      showToast(`บันทึก "${raw.code} - ${raw.name}" เป็น [${STATUS_META[statusKey].short}] แล้ว`);
+      syncSingleItemToCloud(inspectionsMap[itemId]);
+    };
+
+    // =====================================================
+    // FULL LIST TAB (TAB 2)
+    // =====================================================
+    function populateCategoryFilter() {
+      const select = document.getElementById('categoryFilter');
+      const items = getCurrentSheetItems();
+      const cats = new Set();
+      items.forEach(it => {
+        if (it.subCategory) cats.add(it.subCategory);
+      });
+      let html = '<option value="all">ทุกประเภท (' + items.length + ')</option>';
+      Array.from(cats).forEach(c => {
+        html += `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`;
+      });
+      select.innerHTML = html;
+    }
+
+    window.setListStatusFilter = function(flt) {
+      listStatusFilter = flt;
+      document.querySelectorAll('.flt-btn').forEach(btn => {
+        btn.className = "flt-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 shrink-0";
+      });
+      const activeBtn = document.getElementById('flt_' + flt);
+      if (activeBtn) {
+        activeBtn.className = "flt-btn px-2.5 py-1 rounded-lg font-bold bg-blue-600 text-white shrink-0 shadow";
+      }
+      renderFullList();
+    };
+
+    window.renderFullList = function() {
+      const container = document.getElementById('fullListContainer');
+      const q = (document.getElementById('listSearchInput').value || '').trim().toLowerCase();
+      const cat = document.getElementById('categoryFilter').value;
+
+      if (listStatusFilter === 'unlisted') {
+        if (unlistedItems.length === 0) {
+          container.innerHTML = `
+            <div class="p-6 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+              <div class="text-xs text-slate-400">ยังไม่มีรายการพัสดุนอกบัญชี</div>
+              <button type="button" onclick="openUnlistedModal('')" class="px-3 py-2 rounded-lg bg-rose-600 text-white text-xs font-bold">
+                ➕ เพิ่มพัสดุนอกบัญชี
+              </button>
+            </div>
+          `;
+          return;
+        }
+        container.innerHTML = unlistedItems.map(ul => buildUnlistedCardHtml(ul)).join('');
+        return;
+      }
+
+      const items = getCurrentSheetItems().map(getItemWithInspection).filter(item => {
+        if (cat !== 'all' && item.subCategory !== cat) return false;
+        if (listStatusFilter === 'unchecked' && item.status) return false;
+        if (listStatusFilter === 'checked' && !item.status) return false;
+        if (listStatusFilter === 'usable' && item.status !== 'usable') return false;
+        if (listStatusFilter === 'damaged' && item.status !== 'damaged' && item.status !== 'deteriorated' && item.status !== 'unneeded') return false;
+        if (listStatusFilter === 'missing' && item.status !== 'missing' && item.status !== 'lost') return false;
+
+        if (q) {
+          const hay = `${item.seq} ${item.code} ${item.fullCode} ${item.name} ${item.detail} ${item.location} ${item.note}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+
+      if (items.length === 0) {
+        container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 bg-slate-900 rounded-xl border border-slate-800">ไม่พบรายการตามตัวกรองที่เลือก</div>`;
+        return;
+      }
+
+      container.innerHTML = items.map(it => buildAssetCardHtml(it, q)).join('');
+    };
+
+    function buildUnlistedCardHtml(ul) {
+      const st = STATUS_META[ul.status] || STATUS_META.usable;
+      return `
+        <div class="rounded-xl border border-rose-500/50 bg-rose-950/20 p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="px-2 py-0.5 rounded bg-rose-900/80 text-rose-200 text-[11px] font-bold">⚠️ พัสดุนอกบัญชี</span>
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-bold border ${st.badgeCls}">${st.icon} ${st.short}</span>
+          </div>
+          <div class="text-sm font-bold text-white">${escapeHtml(ul.name)}</div>
+          <div class="text-xs text-slate-300 space-y-0.5">
+            <div><span class="text-slate-400">เลขที่พบ:</span> <span class="font-mono text-amber-300">${escapeHtml(ul.code || '-')}</span></div>
+            ${ul.location ? `<div>📍 บริเวณที่พบ: ${escapeHtml(ul.location)}</div>` : ''}
+            ${ul.note ? `<div>💬 หมายเหตุ: ${escapeHtml(ul.note)}</div>` : ''}
+          </div>
+          ${ul.imageUrl ? `<img src="${ul.imageUrl}" onclick="previewFullImage(this.src)" class="w-16 h-16 object-cover rounded-lg border border-slate-600 cursor-pointer">` : ''}
+          <div class="flex justify-end gap-2 pt-1 border-t border-rose-900/40">
+            <button type="button" onclick="deleteUnlistedItem('${ul.id}')" class="px-2.5 py-1 rounded bg-red-950 text-red-300 text-xs">🗑️ ลบ</button>
+          </div>
+        </div>
+      `;
+    }
+
+    // =====================================================
+    // MODAL 1: INSPECT ITEM DETAILS & PHOTO
+    // =====================================================
+    function findRawItemById(id) {
+      return (assetsData.sheet1 || []).find(x => x.id === id) ||
+             (assetsData.sheet2 || []).find(x => x.id === id);
+    }
+
+    window.openInspectModal = function(itemId) {
+      const raw = findRawItemById(itemId);
+      if (!raw) return;
+      const item = getItemWithInspection(raw);
+      activeModalItemId = itemId;
+
+      document.getElementById('mdlSeqBadge').innerText = `ลำดับ ${item.seq || '-'}`;
+      document.getElementById('mdlCodeBadge').innerText = item.code || 'ไม่มีรหัส';
+      document.getElementById('mdlItemName').innerText = item.name || '-';
+      document.getElementById('mdlCategory').innerText = `${item.mainCategory || ''} • ${item.subCategory || ''}`;
+      document.getElementById('mdlFullCode').innerText = item.fullCode || '-';
+      document.getElementById('mdlDate').innerText = item.dateText || item.dateRaw || '-';
+      document.getElementById('mdlDetail').innerText = item.detail || '-';
+
+      document.getElementById('mdlLocation').value = item.location || '';
+      document.getElementById('mdlNote').value = item.note || '';
+
+      activeModalImageData = item.imageUrl || '';
+      updateModalPhotoPreview();
+
+      selectModalStatus(item.status || 'usable');
+
+      const clearBtn = document.getElementById('mdlClearCheckBtn');
+      if (inspectionsMap[itemId]) clearBtn.classList.remove('hidden');
+      else clearBtn.classList.add('hidden');
+
+      const modal = document.getElementById('inspectModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    };
+
+    window.closeInspectModal = function() {
+      const modal = document.getElementById('inspectModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      activeModalItemId = null;
+    };
+
+    window.selectModalStatus = function(statusKey) {
+      activeModalStatus = statusKey;
+      Object.keys(STATUS_META).forEach(k => {
+        const btn = document.getElementById('stBtn_' + k);
+        if (!btn) return;
+        btn.className = "status-btn py-2.5 px-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold flex flex-col items-center gap-1";
+        if (k === statusKey) {
+          btn.classList.add('active-' + k);
+        }
+      });
+    };
+
+    window.handleModalPhotoPicked = function(input) {
+      if (!input.files || !input.files[0]) return;
+      compressImageFile(input.files[0], 1000, 0.78, (base64) => {
+        activeModalImageData = base64;
+        updateModalPhotoPreview();
+      });
+      input.value = '';
+    };
+
+    function updateModalPhotoPreview() {
+      const wrap = document.getElementById('mdlPhotoPreviewWrap');
+      const img = document.getElementById('mdlPhotoPreviewImg');
+      if (activeModalImageData) {
+        img.src = activeModalImageData;
+        wrap.classList.remove('hidden');
+      } else {
+        img.src = '';
+        wrap.classList.add('hidden');
+      }
+    }
+
+    window.removeModalPhoto = function() {
+      activeModalImageData = '';
+      updateModalPhotoPreview();
+    };
+
+    window.saveModalInspection = function() {
+      if (!activeModalItemId) return;
+      const raw = findRawItemById(activeModalItemId);
+      if (!raw) return;
+
+      const loc = document.getElementById('mdlLocation').value.trim();
+      const note = document.getElementById('mdlNote').value.trim();
+      const timestamp = getThaiNowString();
+
+      const record = {
+        id: activeModalItemId,
+        sheet: raw.sheet,
+        rowIndex: raw.rowIndex,
+        code: raw.code,
+        name: raw.name,
+        status: activeModalStatus,
+        location: loc,
+        note: note,
+        imageUrl: activeModalImageData,
+        checkedAt: timestamp
+      };
+
+      inspectionsMap[activeModalItemId] = record;
+      saveLocalState();
+      closeInspectModal();
+      renderSearchArea();
+      renderFullList();
+      showToast(`บันทึกผลการตรวจ "${raw.code} - ${raw.name}" เรียบร้อย!`);
+      syncSingleItemToCloud(record);
+    };
+
+    window.clearItemInspection = function() {
+      if (!activeModalItemId) return;
+      delete inspectionsMap[activeModalItemId];
+      saveLocalState();
+      closeInspectModal();
+      renderSearchArea();
+      renderFullList();
+      showToast('ล้างผลการตรวจของรายการนี้แล้ว');
+    };
+
+    // =====================================================
+    // MODAL 2: UNLISTED ITEMS (พัสดุนอกบัญชี)
+    // =====================================================
+    window.openUnlistedModal = function(prefillCode) {
+      document.getElementById('ulEditId').value = '';
+      document.getElementById('ulCode').value = prefillCode || '';
+      document.getElementById('ulName').value = '';
+      document.getElementById('ulStatus').value = 'usable';
+      document.getElementById('ulLocation').value = '';
+      document.getElementById('ulNote').value = '';
+      activeUlImageData = '';
+      document.getElementById('ulPhotoPreviewWrap').classList.add('hidden');
+
+      const modal = document.getElementById('unlistedModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    };
+
+    window.closeUnlistedModal = function() {
+      const modal = document.getElementById('unlistedModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    };
+
+    window.handleUlPhotoPicked = function(input) {
+      if (!input.files || !input.files[0]) return;
+      compressImageFile(input.files[0], 1000, 0.78, (base64) => {
+        activeUlImageData = base64;
+        document.getElementById('ulPhotoPreviewImg').src = base64;
+        document.getElementById('ulPhotoPreviewWrap').classList.remove('hidden');
+      });
+      input.value = '';
+    };
+
+    window.removeUlPhoto = function() {
+      activeUlImageData = '';
+      document.getElementById('ulPhotoPreviewWrap').classList.add('hidden');
+    };
+
+    window.saveUnlistedItem = function() {
+      const code = document.getElementById('ulCode').value.trim();
+      const name = document.getElementById('ulName').value.trim();
+      if (!name) {
+        alert('กรุณาระบุชื่อพัสดุหรือลักษณะสิ่งของที่พบ');
+        return;
+      }
+      const item = {
+        id: 'UL_' + Date.now(),
+        code: code || 'ไม่มีเลขพัสดุ',
+        name: name,
+        status: document.getElementById('ulStatus').value,
+        location: document.getElementById('ulLocation').value.trim(),
+        note: document.getElementById('ulNote').value.trim(),
+        imageUrl: activeUlImageData,
+        checkedAt: getThaiNowString()
+      };
+      unlistedItems.unshift(item);
+      saveLocalState();
+      closeUnlistedModal();
+      renderSearchArea();
+      renderFullList();
+      showToast('บันทึกพัสดุนอกบัญชีเรียบร้อย!');
+      syncUnlistedToCloud(item);
+    };
+
+    window.deleteUnlistedItem = function(id) {
+      if (!confirm('ยืนยันลบรายการพัสดุนอกบัญชีนี้?')) return;
+      unlistedItems = unlistedItems.filter(x => x.id !== id);
+      saveLocalState();
+      renderFullList();
+      showToast('ลบรายการนอกบัญชีแล้ว');
+    };
+
+    // =====================================================
+    // OFFICIAL TABLE PREVIEW & EXCEL EXPORT (ตรงตามโครงสร้างไฟล์ส่งกองคลัง 100%)
+    // =====================================================
+    window.renderOfficialTablePreview = function() {
+      const tbody = document.getElementById('officialTableBody');
+      if (!tbody) return;
+      const fltEl = document.getElementById('officialTableFilter');
+      const flt = fltEl ? fltEl.value : 'all';
+
+      const items = getCurrentSheetItems().map(getItemWithInspection).filter(it => {
+        if (flt === 'checked' && !it.status) return false;
+        if (flt === 'unchecked' && it.status) return false;
+        return true;
+      });
+
+      if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="14" class="text-center py-4 text-slate-400">ไม่มีรายการตามตัวกรอง</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = items.map(it => {
+        const s = ['', '', '', '', '', ''];
+        if (it.status && STATUS_META[it.status]) {
+          s[STATUS_META[it.status].colOffset] = '/';
+        }
+        const rowBg = it.status ? 'bg-emerald-950/20 hover:bg-slate-800/80' : 'hover:bg-slate-800/80';
+        return `
+          <tr onclick="openInspectModal('${it.id}')" class="cursor-pointer transition ${rowBg}">
+            <td class="border border-slate-800 px-1.5 py-1 text-center text-slate-300">${escapeHtml(it.seq)}</td>
+            <td class="border border-slate-800 px-1.5 py-1 whitespace-nowrap text-slate-300">${escapeHtml(it.dateText)}</td>
+            <td class="border border-slate-800 px-1.5 py-1 whitespace-nowrap font-mono font-bold text-amber-300">${escapeHtml(it.code)}</td>
+            <td class="border border-slate-800 px-2 py-1 font-semibold text-white">${escapeHtml(it.name)}</td>
+            <td class="border border-slate-800 px-2 py-1 text-slate-300 line-clamp-2 max-w-[220px]">${escapeHtml(it.detail)}</td>
+            <td class="border border-slate-800 px-1 py-1 text-center font-extrabold text-emerald-400 text-sm">${s[0]}</td>
+            <td class="border border-slate-800 px-1 py-1 text-center font-extrabold text-amber-400 text-sm">${s[1]}</td>
+            <td class="border border-slate-800 px-1 py-1 text-center font-extrabold text-orange-400 text-sm">${s[2]}</td>
+            <td class="border border-slate-800 px-1 py-1 text-center font-extrabold text-purple-400 text-sm">${s[3]}</td>
+            <td class="border border-slate-800 px-1 py-1 text-center font-extrabold text-red-400 text-sm">${s[4]}</td>
+            <td class="border border-slate-800 px-1 py-1 text-center font-extrabold text-rose-400 text-sm">${s[5]}</td>
+            <td class="border border-slate-800 px-2 py-1 text-blue-300 whitespace-nowrap">${escapeHtml(it.location || '')}</td>
+            <td class="border border-slate-800 px-1.5 py-1 text-slate-400 whitespace-nowrap">${escapeHtml(it.owner || '')}</td>
+            <td class="border border-slate-800 px-2 py-1 text-amber-200">${escapeHtml(it.note || '')}</td>
+          </tr>
+        `;
+      }).join('');
+    };
+
+    function setWorksheetCellValue(ws, rZero, cZero, val) {
+      const addr = XLSX.utils.encode_cell({ r: rZero, c: cZero });
+      if (!ws[addr]) {
+        ws[addr] = { t: 's', v: String(val) };
+      } else {
+        ws[addr].t = 's';
+        ws[addr].v = String(val);
+        delete ws[addr].w;
+      }
+    }
+
+    window.exportToExcel = function() {
+      if (typeof XLSX === 'undefined') {
+        alert('กำลังโหลดไลบรารีสร้างไฟล์ Excel กรุณาลองใหม่อีกครั้ง');
+        return;
+      }
+
+      // กรณีมีแม่แบบไฟล์ Excel ต้นฉบับฝังอยู่ (window.ORIGINAL_EXCEL_BASE64)
+      // จะเปิดไฟล์ต้นฉบับแล้วหยอดเฉพาะช่องผลการตรวจสอบ (K-P), ใช้ประจำที่ (Q), หมายเหตุ (S)
+      // เพื่อรักษาโครงสร้างหัวตาราง การผสานเซลล์ และคอลัมน์ที่ซ่อนไว้ (B-E) 100% สำหรับส่งคืนกองคลัง
+      if (window.ORIGINAL_EXCEL_BASE64 && window.ORIGINAL_EXCEL_BASE64.length > 100) {
+        try {
+          const wb = XLSX.read(window.ORIGINAL_EXCEL_BASE64, {
+            type: 'base64',
+            cellStyles: true,
+            cellNF: true,
+            cellDates: true
+          });
+
+          // 1. อัปเดตชีต 1: "ช่าง"
+          const ws1 = wb.Sheets[wb.SheetNames[0]];
+          if (ws1) {
+            // คงการซ่อนคอลัมน์ B, C, D, E เหมือนไฟล์ต้นฉบับของกองคลัง
+            ws1['!cols'] = ws1['!cols'] || [];
+            [1, 2, 3, 4].forEach(cIdx => {
+              ws1['!cols'][cIdx] = Object.assign(ws1['!cols'][cIdx] || {}, { hidden: true });
+            });
+
+            (assetsData.sheet1 || []).forEach(raw => {
+              const rec = inspectionsMap[raw.id];
+              const rZero = (parseInt(raw.rowIndex, 10) || 6) - 1;
+              // ล้างและใส่เครื่องหมาย / ในช่องผลการตรวจสอบ Col K(10) ถึง P(15)
+              for (let offset = 0; offset < 6; offset++) {
+                const mark = (rec && rec.status && STATUS_META[rec.status] && STATUS_META[rec.status].colOffset === offset) ? '/' : '';
+                setWorksheetCellValue(ws1, rZero, 10 + offset, mark);
+              }
+              // ใช้ประจำที่ Col Q (cZero = 16)
+              if (rec && rec.location !== undefined) {
+                setWorksheetCellValue(ws1, rZero, 16, rec.location);
+              }
+              // หมายเหตุ Col S (cZero = 18)
+              if (rec && rec.note !== undefined) {
+                setWorksheetCellValue(ws1, rZero, 18, rec.note);
+              }
+            });
+          }
+
+          // 2. อัปเดตชีต 2: "ทีดินและสิ่งปลูกสร้าง"
+          if (wb.SheetNames.length > 1) {
+            const ws2 = wb.Sheets[wb.SheetNames[1]];
+            if (ws2) {
+              ws2['!cols'] = ws2['!cols'] || [];
+              [0, 1, 2, 3, 5].forEach(cIdx => {
+                ws2['!cols'][cIdx] = Object.assign(ws2['!cols'][cIdx] || {}, { hidden: true });
+              });
+
+              (assetsData.sheet2 || []).forEach(raw => {
+                const rec = inspectionsMap[raw.id];
+                const rZero = (parseInt(raw.rowIndex, 10) || 7) - 1;
+                // ช่องผลการตรวจสอบ Col L(11) ถึง Q(16)
+                for (let offset = 0; offset < 6; offset++) {
+                  const mark = (rec && rec.status && STATUS_META[rec.status] && STATUS_META[rec.status].colOffset === offset) ? '/' : '';
+                  setWorksheetCellValue(ws2, rZero, 11 + offset, mark);
+                }
+                // ใช้ประจำที่ Col R (cZero = 17)
+                if (rec && rec.location !== undefined) {
+                  setWorksheetCellValue(ws2, rZero, 17, rec.location);
+                }
+                // หมายเหตุ Col T (cZero = 19)
+                if (rec && rec.note !== undefined) {
+                  setWorksheetCellValue(ws2, rZero, 19, rec.note);
+                }
+              });
+            }
+          }
+
+          // 3. หากมีรายการพัสดุนอกบัญชี ให้เพิ่มชีต "พัสดุนอกบัญชี" ต่อท้าย
+          if (unlistedItems.length > 0) {
+            const rowsUl = [
+              ['รายการพัสดุนอกบัญชี / ค้นไม่พบในระบบ ประจำปีงบประมาณ 2569'],
+              ['ลำดับ', 'เลขพัสดุที่พบ', 'ชื่อพัสดุ / ลักษณะ', 'สภาพพัสดุ', 'สถานที่พบ', 'หมายเหตุ', 'วันเวลาที่บันทึก']
+            ];
+            unlistedItems.forEach((ul, i) => {
+              const stLabel = STATUS_META[ul.status] ? STATUS_META[ul.status].label : ul.status;
+              rowsUl.push([i + 1, ul.code, ul.name, stLabel, ul.location, ul.note, ul.checkedAt]);
+            });
+            const wsUl = XLSX.utils.aoa_to_sheet(rowsUl);
+            XLSX.utils.book_append_sheet(wb, wsUl, 'พัสดุนอกบัญชี');
+          }
+
+          XLSX.writeFile(wb, 'ตรวจสอบพัสดุ 2569 (ส่งกองคลัง).xlsx');
+          showToast('ดาวน์โหลดไฟล์ Excel ต้นฉบับสำหรับส่งกองคลังเรียบร้อยแล้ว!');
+          return;
+        } catch (err) {
+          console.error('Template export fallback:', err);
+        }
+      }
+
+      // Fallback กรณีไม่มี Base64 Template
+      const wb = XLSX.utils.book_new();
+      const rowsSheet1 = [
+        ['บัญชีรายละเอียดพัสดุประจำปีงบประมาณ 2569'],
+        ['กองช่าง องค์การบริหารส่วนตำบลบางขุนกอง'],
+        ['ลำดับ', '', '', '', '', 'วัน/เดือน/ปี', 'เลขที่หรือรหัส', ' ชื่อพัสดุ', 'รายละเอียด', ' ราคาต่อ ', 'ผลการตรวจสอบ', '', '', '', '', '', 'ใช้', 'เจ้าของ', 'หมายเหตุ'],
+        ['', '', '', '', 'วัน/เดือน/ปี', '', '', '', '', ' หน่วย ', 'มี', 'มี', 'มี', 'มี', 'ไม่พบ', 'สูญไป', 'ประจำ', 'งบ', ''],
+        ['', '', '', '', '', '', '', '', '', ' (บาท) ', 'ใช้ได้', 'ชำรุด', 'เสื่อมสภาพ', 'ไม่จำเป็นใช้', '', '', 'ที่', 'ประมาณ', '']
+      ];
+
+      (assetsData.sheet1 || []).forEach(raw => {
+        const it = getItemWithInspection(raw);
+        const sCols = ['', '', '', '', '', ''];
+        if (it.status && STATUS_META[it.status]) {
+          sCols[STATUS_META[it.status].colOffset] = '/';
+        }
+        rowsSheet1.push([
+          it.seq,
+          it.mainCategory,
+          it.subCategory,
+          it.fullCode,
+          it.dateRaw,
+          it.dateText,
+          it.code,
+          it.name,
+          it.detail,
+          it.price,
+          sCols[0], sCols[1], sCols[2], sCols[3], sCols[4], sCols[5],
+          it.location || '',
+          it.owner || 'กองช่าง',
+          it.note || ''
+        ]);
+      });
+
+      const ws1 = XLSX.utils.aoa_to_sheet(rowsSheet1);
+      ws1['!cols'] = [{wch:5},{hidden:true},{hidden:true},{hidden:true},{hidden:true},{wch:11},{wch:13},{wch:20},{wch:35},{wch:10},{wch:6},{wch:6},{wch:9},{wch:10},{wch:6},{wch:6},{wch:12},{wch:10},{wch:15}];
+      XLSX.utils.book_append_sheet(wb, ws1, 'ช่าง');
+
+      XLSX.writeFile(wb, 'ตรวจสอบพัสดุ 2569 (ส่งกองคลัง).xlsx');
+      showToast('ดาวน์โหลดไฟล์ Excel เรียบร้อยแล้ว!');
+    };
+
+    window.importExcelFile = function(input) {
+      if (!input.files || !input.files[0]) return;
+      const file = input.files[0];
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const wb = XLSX.read(data, { type: 'array' });
+          const newSheet1 = [];
+          const newSheet2 = [];
+
+          // Parse Sheet 1
+          const ws1 = wb.Sheets[wb.SheetNames[0]];
+          if (ws1) {
+            const rows = XLSX.utils.sheet_to_json(ws1, { header: 1, defval: '' });
+            for (let r = 5; r < rows.length; r++) {
+              const row = rows[r];
+              const code = String(row[6] || '').trim();
+              const name = String(row[7] || '').trim();
+              if (!code && !name) continue;
+              const id = 'S1_' + (r + 1);
+              newSheet1.push({
+                id: id,
+                sheet: 'ช่าง',
+                rowIndex: r + 1,
+                seq: String(row[0] || '').trim(),
+                mainCategory: String(row[1] || '').trim(),
+                subCategory: String(row[2] || '').trim(),
+                fullCode: String(row[3] || '').trim(),
+                dateRaw: String(row[4] || '').trim(),
+                dateText: String(row[5] || '').trim(),
+                code: code,
+                name: name,
+                detail: String(row[8] || '').trim(),
+                price: String(row[9] || '').trim(),
+                location: String(row[16] || '').trim(),
+                owner: String(row[17] || '').trim(),
+                note: String(row[18] || '').trim()
+              });
+            }
+          }
+
+          // Parse Sheet 2 if exists
+          if (wb.SheetNames.length > 1) {
+            const ws2 = wb.Sheets[wb.SheetNames[1]];
+            const rows2 = XLSX.utils.sheet_to_json(ws2, { header: 1, defval: '' });
+            for (let r = 6; r < rows2.length; r++) {
+              const row = rows2[r];
+              const code = String(row[7] || '').trim();
+              const name = String(row[8] || '').trim();
+              if (!code && !name) continue;
+              const id = 'S2_' + (r + 1);
+              newSheet2.push({
+                id: id,
+                sheet: 'ทีดินและสิ่งปลูกสร้าง',
+                rowIndex: r + 1,
+                groupNo: String(row[0] || '').trim(),
+                mainCategory: String(row[1] || '').trim(),
+                subCategory: String(row[2] || '').trim(),
+                fullCode: String(row[3] || '').trim(),
+                seq: String(row[4] || '').trim(),
+                dateRaw: String(row[5] || '').trim(),
+                dateText: String(row[6] || '').trim(),
+                code: code,
+                name: name,
+                detail: String(row[9] || '').trim(),
+                price: String(row[10] || '').trim(),
+                location: String(row[17] || '').trim(),
+                owner: String(row[18] || '').trim(),
+                note: String(row[19] || '').trim()
+              });
+            }
+          }
+
+          if (newSheet1.length > 0) {
+            assetsData = { sheet1: newSheet1, sheet2: newSheet2.length > 0 ? newSheet2 : assetsData.sheet2 };
+            localStorage.setItem(STORAGE_KEY_CUSTOM_DATA, JSON.stringify(assetsData));
+            populateCategoryFilter();
+            updateAllStats();
+            renderSearchArea();
+            renderFullList();
+            showToast(`นำเข้าข้อมูลสำเร็จ (ช่าง ${newSheet1.length} รายการ)`);
+          } else {
+            alert('ไม่พบข้อมูลพัสดุในรูปแบบที่รองรับ');
+          }
+        } catch (err) {
+          alert('เกิดข้อผิดพลาดในการอ่านไฟล์ Excel: ' + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+      input.value = '';
+    };
+
+    // =====================================================
+    // BACKUP & RESTORE JSON
+    // =====================================================
+    window.exportJsonBackup = function() {
+      const backup = {
+        exportedAt: getThaiNowString(),
+        inspections: inspectionsMap,
+        unlisted: unlistedItems
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backup_ตรวจสอบพัสดุ_2569_${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    window.importJsonBackup = function(input) {
+      if (!input.files || !input.files[0]) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed.inspections) inspectionsMap = Object.assign({}, inspectionsMap, parsed.inspections);
+          if (Array.isArray(parsed.unlisted)) unlistedItems = parsed.unlisted;
+          saveLocalState();
+          renderSearchArea();
+          renderFullList();
+          showToast('กู้คืนข้อมูลผลการตรวจสอบสำเร็จ!');
+        } catch (err) {
+          alert('ไฟล์สำรองข้อมูลไม่ถูกต้อง');
+        }
+      };
+      reader.readAsText(input.files[0]);
+      input.value = '';
+    };
+
+    window.clearAllInspectionData = function() {
+      if (!confirm('ยืนยันล้างผลการตรวจสอบทั้งหมดที่บันทึกไว้ในเครื่องนี้ใช่หรือไม่? (รายการบัญชีพัสดุตั้งต้น 271 + 223 รายการจะยังอยู่ครบ)')) return;
+      inspectionsMap = {};
+      unlistedItems = [];
+      saveLocalState();
+      renderSearchArea();
+      renderFullList();
+      showToast('ล้างผลการตรวจสอบทั้งหมดแล้ว');
+    };
+
+    // =====================================================
+    // CLOUD SYNC (GOOGLE APPS SCRIPT / GOOGLE SHEETS)
+    // =====================================================
+    window.openCloudModal = function() {
+      const modal = document.getElementById('cloudModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    };
+
+    window.closeCloudModal = function() {
+      const modal = document.getElementById('cloudModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    };
+
+    window.saveCloudConfig = function() {
+      const url = document.getElementById('gasUrlInput').value.trim();
+      localStorage.setItem(STORAGE_KEY_GAS_URL, url);
+      document.getElementById('cloudSyncMsg').innerText = url ? '✅ บันทึก URL เรียบร้อยแล้ว' : 'ยกเลิกการเชื่อม Cloud แล้ว';
+      showToast('บันทึกการตั้งค่า Cloud แล้ว');
+    };
+
+    function syncSingleItemToCloud(record) {
+      const gasUrl = localStorage.getItem(STORAGE_KEY_GAS_URL);
+      if (!gasUrl) return;
+      const payload = Object.assign({ action: 'saveInspection' }, record);
+      if (record.imageUrl && record.imageUrl.startsWith('data:image')) {
+        payload.imageFile = { name: `${record.code || 'asset'}.jpg`, data: record.imageUrl };
+      } else {
+        payload.existingImageUrl = record.imageUrl || '';
+      }
+      fetch(gasUrl, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res && res.imageUrl && inspectionsMap[record.id]) {
+          inspectionsMap[record.id].imageUrl = res.imageUrl;
+          saveLocalState();
+        }
+      })
+      .catch(() => {});
+    }
+
+    function syncUnlistedToCloud(item) {
+      const gasUrl = localStorage.getItem(STORAGE_KEY_GAS_URL);
+      if (!gasUrl) return;
+      const payload = Object.assign({ action: 'saveUnlisted' }, item);
+      if (item.imageUrl && item.imageUrl.startsWith('data:image')) {
+        payload.imageFile = { name: `unlisted_${Date.now()}.jpg`, data: item.imageUrl };
+      }
+      fetch(gasUrl, { method: 'POST', body: JSON.stringify(payload) }).catch(() => {});
+    }
+
+    window.pullFromCloud = function(silent = false) {
+      const gasUrl = localStorage.getItem(STORAGE_KEY_GAS_URL) || document.getElementById('gasUrlInput').value.trim();
+      if (!gasUrl) {
+        if (!silent) alert('กรุณาวาง Google Apps Script Web App URL ก่อนครับ');
+        return;
+      }
+      if (!silent) document.getElementById('cloudSyncMsg').innerText = '⏳ กำลังดึงข้อมูลจาก Google Sheets...';
+      fetch(gasUrl + '?action=getAll')
+        .then(r => r.json())
+        .then(res => {
+          if (res && res.success) {
+            if (res.inspections) {
+              inspectionsMap = Object.assign({}, inspectionsMap, res.inspections);
+            }
+            if (Array.isArray(res.unlisted) && res.unlisted.length > 0) {
+              unlistedItems = res.unlisted;
+            }
+            saveLocalState();
+            renderSearchArea();
+            renderFullList();
+            if (!silent) {
+              document.getElementById('cloudSyncMsg').innerText = '✅ ดึงข้อมูลจาก Google Sheets สำเร็จ!';
+              showToast('ซิงค์ข้อมูลจาก Google Sheets สำเร็จ!');
+            }
+          }
+        })
+        .catch(err => {
+          if (!silent) document.getElementById('cloudSyncMsg').innerText = '❌ ดึงข้อมูลไม่สำเร็จ: ' + err.message;
+        });
+    };
+
+    window.pushAllToCloud = function() {
+      const gasUrl = localStorage.getItem(STORAGE_KEY_GAS_URL) || document.getElementById('gasUrlInput').value.trim();
+      if (!gasUrl) {
+        alert('กรุณาวาง Google Apps Script Web App URL ก่อนครับ');
+        return;
+      }
+      const items = Object.values(inspectionsMap);
+      document.getElementById('cloudSyncMsg').innerText = `⏳ กำลังอัปโหลด ${items.length} รายการขึ้น Google Sheets...`;
+      fetch(gasUrl, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'syncBatch',
+          items: items,
+          unlisted: unlistedItems
+        })
+      })
+      .then(r => r.json())
+      .then(res => {
+        document.getElementById('cloudSyncMsg').innerText = '✅ ' + (res.message || 'ซิงค์สำเร็จ');
+        showToast('ส่งข้อมูลทั้งหมดขึ้น Google Sheets เรียบร้อย!');
+      })
+      .catch(err => {
+        document.getElementById('cloudSyncMsg').innerText = '❌ อัปโหลดไม่สำเร็จ: ' + err.message;
+      });
+    };
+
+    // =====================================================
+    // UTILITIES (IMAGE COMPRESSION, LIGHTBOX, FULLSCREEN)
+    // =====================================================
+    function compressImageFile(file, maxDim, quality, callback) {
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const img = new Image();
+        img.onload = function() {
+          let w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+            else { w = Math.round(w * maxDim / h); h = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          callback(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    window.previewFullImage = function(src) {
+      if (!src) return;
+      const modal = document.getElementById('lightboxModal');
+      document.getElementById('lightboxImg').src = src;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    };
+
+    window.toggleFullScreen = function() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    };
+
+    function getThaiNowString() {
+      const d = new Date();
+      const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+      return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear() + 543} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} น.`;
+    }
+
+    let toastTimer = null;
+    function showToast(msg) {
+      const box = document.getElementById('toastBox');
+      box.innerText = '✅ ' + msg;
+      box.classList.remove('hidden');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => box.classList.add('hidden'), 2600);
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function escapeAttr(str) {
+      return String(str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>
+
