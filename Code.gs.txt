@@ -1,0 +1,396 @@
+/**
+ * ระบบตรวจสอบพัสดุประจำปีงบประมาณ 2569 (กองช่าง อบต.บางขุนกอง)
+ * Google Apps Script (Code.gs) สำหรับเชื่อมต่อกับ Google Sheets และ Google Drive
+ * 
+ * วิธีตั้งค่าใช้งานออนไลน์:
+ * 1. อัปโหลดไฟล์ "ตรวจสอบพัสดุ 2569.xlsx" ขึ้น Google Drive แล้วเปิดด้วย Google Sheets (หรือสร้าง Google Sheet ใหม่)
+ * 2. ไปที่เมนู ส่วนขยาย (Extensions) > Apps Script
+ * 3. วางโค้ดนี้ลงในไฟล์ Code.gs
+ * 4. แก้ไข SPREADSHEET_ID และ FOLDER_ID ด้านล่างให้ตรงกับของคุณ (หากวางใน Sheet นั้นโดยตรงสามารถเว้นว่าง SPREADSHEET_ID ได้)
+ * 5. กด "ทำให้ใช้งานได้" (Deploy) > "การทำให้ใช้งานได้รายการใหม่" (New deployment)
+ *    - ประเภท: เว็บแอป (Web app)
+ *    - ดำเนินการในฐานะ: ฉัน (Me)
+ *    - ผู้ที่มีสิทธิ์เข้าถึง: ทุกคน (Anyone)
+ * 6. คัดลอก URL ของเว็บแอป ไปวางในปุ่ม "ตั้งค่า Cloud / Google Sheets" ในหน้าแอป
+ */
+
+const SPREADSHEET_ID = ''; // ใส่ Spreadsheet ID ที่นี่ (หรือเว้นว่างไว้หากสร้าง Script ในไฟล์ Google Sheets นั้นโดยตรง)
+const FOLDER_ID = '';      // ใส่ Folder ID ของ Google Drive สำหรับเก็บรูปถ่ายพัสดุ (ถ้าไม่ใส่จะสร้างโฟลเดอร์ให้อัตโนมัติ)
+
+function getSpreadsheet() {
+  if (SPREADSHEET_ID && SPREADSHEET_ID.trim() !== '') {
+    return SpreadsheetApp.openById(SPREADSHEET_ID.trim());
+  }
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+function getUploadFolder() {
+  if (FOLDER_ID && FOLDER_ID.trim() !== '') {
+    try {
+      return DriveApp.getFolderById(FOLDER_ID.trim());
+    } catch (e) {}
+  }
+  const folders = DriveApp.getFoldersByName('รูปภาพตรวจสอบพัสดุ_2569');
+  if (folders.hasNext()) {
+    return folders.next();
+  }
+  const newFolder = DriveApp.createFolder('รูปภาพตรวจสอบพัสดุ_2569');
+  newFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return newFolder;
+}
+
+function getThaiTimestamp() {
+  const d = new Date();
+  const bangkokTime = new Date(d.getTime() + (7 * 60 + d.getTimezoneOffset()) * 60000);
+  const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  const day = bangkokTime.getDate();
+  const month = thaiMonths[bangkokTime.getMonth()];
+  const year = bangkokTime.getFullYear() + 543;
+  const hours = String(bangkokTime.getHours()).padStart(2, '0');
+  const mins = String(bangkokTime.getMinutes()).padStart(2, '0');
+  return `${day} ${month} ${year} ${hours}:${mins} น.`;
+}
+
+function doGet(e) {
+  const action = (e && e.parameter && e.parameter.action) ? e.parameter.action : '';
+
+  if (action === 'getAll') {
+    const result = getAllInspectionData();
+    return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === 'ping') {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      message: 'เชื่อมต่อ Google Sheets สำเร็จ!'
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // กรณีรันผ่าน Google Apps Script HTML Service โดยตรง
+  try {
+    return HtmlService.createTemplateFromFile('index')
+      .evaluate()
+      .setTitle('ระบบตรวจสอบพัสดุ 2569 - กองช่าง อบต.บางขุนกอง')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      message: 'API ระบบตรวจสอบพัสดุพร้อมใช้งาน'
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doPost(e) {
+  try {
+    const payload = JSON.parse(e.postData.contents);
+    const action = payload.action;
+
+    if (action === 'saveInspection') {
+      const res = saveInspectionRecord(payload);
+      return ContentService.createTextOutput(JSON.stringify(res))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'saveUnlisted') {
+      const res = saveUnlistedRecord(payload);
+      return ContentService.createTextOutput(JSON.stringify(res))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'deleteUnlisted') {
+      const res = deleteUnlistedRecord(payload);
+      return ContentService.createTextOutput(JSON.stringify(res))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'syncBatch') {
+      const res = syncBatchRecords(payload);
+      return ContentService.createTextOutput(JSON.stringify(res))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      message: 'ไม่รู้จักคำสั่ง: ' + action
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      message: 'เกิดข้อผิดพลาด: ' + err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function uploadBase64Image(imageFile) {
+  if (!imageFile || !imageFile.data || imageFile.data.indexOf(',') === -1) return '';
+  try {
+    const folder = getUploadFolder();
+    const contentType = imageFile.data.substring(5, imageFile.data.indexOf(';'));
+    const bytes = Utilities.base64Decode(imageFile.data.substr(imageFile.data.indexOf(',') + 1));
+    const filename = imageFile.name || ('asset_' + Date.now() + '.jpg');
+    const blob = Utilities.newBlob(bytes, contentType, filename);
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return 'https://lh3.googleusercontent.com/d/' + file.getId() + '=s0';
+  } catch (err) {
+    Logger.log('Upload image error: ' + err.toString());
+    return '';
+  }
+}
+
+/**
+ * บันทึกผลการตรวจสอบลงในชีตต้นฉบับ ("ช่าง" หรือ "ทีดินและสิ่งปลูกสร้าง")
+ * และบันทึกลงชีต "InspectionLog" เพื่อซิงค์ข้อมูลได้อย่างรวดเร็ว
+ */
+function saveInspectionRecord(data) {
+  const ss = getSpreadsheet();
+  const finalUrls = [];
+  if (data.existingImageUrl) {
+    String(data.existingImageUrl).split(',').map(s => s.trim()).filter(Boolean).forEach(u => finalUrls.push(u));
+  }
+  if (Array.isArray(data.imageFiles) && data.imageFiles.length > 0) {
+    data.imageFiles.forEach(imgFile => {
+      const uploaded = uploadBase64Image(imgFile);
+      if (uploaded) finalUrls.push(uploaded);
+    });
+  } else if (data.imageFile && data.imageFile.data) {
+    const uploaded = uploadBase64Image(data.imageFile);
+    if (uploaded) finalUrls.push(uploaded);
+  }
+  const imageUrl = finalUrls.join(',');
+
+  const timestamp = getThaiTimestamp();
+  const statusMap = {
+    'usable': 0,      // มี - ใช้ได้
+    'damaged': 1,     // มี - ชำรุด
+    'deteriorated': 2,// มี - เสื่อมสภาพ
+    'unneeded': 3,    // มี - ไม่จำเป็นใช้
+    'missing': 4,     // ไม่พบ
+    'lost': 5         // สูญไป
+  };
+
+  // 1. อัปเดตลงชีตจริง (หากมีชีต "ช่าง" หรือ "ทีดินและสิ่งปลูกสร้าง" อยู่ในไฟล์ Google Sheets)
+  const targetSheetName = data.sheet || 'ช่าง';
+  const ws = ss.getSheetByName(targetSheetName);
+  if (ws && data.rowIndex) {
+    const rowIdx = parseInt(data.rowIndex, 10);
+    const isSheet1 = (targetSheetName === 'ช่าง');
+    const startStatusCol = isSheet1 ? 11 : 12; // ช่าง: K(11)-P(16), ที่ดิน: L(12)-Q(17)
+    const locCol = isSheet1 ? 17 : 18;
+    const noteCol = isSheet1 ? 19 : 20;
+    const imgCol = isSheet1 ? 20 : 21;
+    const timeCol = isSheet1 ? 21 : 22;
+
+    const statusValues = [['', '', '', '', '', '']];
+    if (data.status && statusMap[data.status] !== undefined) {
+      statusValues[0][statusMap[data.status]] = '/';
+    }
+    ws.getRange(rowIdx, startStatusCol, 1, 6).setValues(statusValues);
+    if (data.location !== undefined) ws.getRange(rowIdx, locCol).setValue(data.location);
+    if (data.note !== undefined) ws.getRange(rowIdx, noteCol).setValue(data.note);
+    if (imageUrl) ws.getRange(rowIdx, imgCol).setValue(imageUrl);
+    ws.getRange(rowIdx, timeCol).setValue(timestamp);
+  }
+
+  // 2. บันทึกลงชีตฐานข้อมูลสถานะ "InspectionLog"
+  let logSheet = ss.getSheetByName('InspectionLog');
+  if (!logSheet) {
+    logSheet = ss.insertSheet('InspectionLog');
+    logSheet.appendRow(['id', 'sheet', 'rowIndex', 'code', 'name', 'status', 'location', 'note', 'imageUrl', 'checkedAt']);
+  }
+
+  const lastRow = logSheet.getLastRow();
+  let foundRow = -1;
+  if (lastRow > 1) {
+    const ids = logSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(data.id)) {
+        foundRow = i + 2;
+        break;
+      }
+    }
+  }
+
+  const rowValues = [[
+    data.id,
+    data.sheet || 'ช่าง',
+    data.rowIndex || '',
+    data.code || '',
+    data.name || '',
+    data.status || '',
+    data.location || '',
+    data.note || '',
+    imageUrl,
+    timestamp
+  ]];
+
+  if (foundRow !== -1) {
+    logSheet.getRange(foundRow, 1, 1, 10).setValues(rowValues);
+  } else {
+    logSheet.appendRow(rowValues[0]);
+  }
+
+  return {
+    success: true,
+    message: 'บันทึกผลการตรวจสอบเรียบร้อย',
+    imageUrl: imageUrl,
+    checkedAt: timestamp
+  };
+}
+
+/**
+ * บันทึกพัสดุนอกบัญชี / ค้นไม่พบในระบบ ลงชีต "พัสดุนอกบัญชี"
+ */
+function saveUnlistedRecord(data) {
+  const ss = getSpreadsheet();
+  let ulSheet = ss.getSheetByName('พัสดุนอกบัญชี');
+  if (!ulSheet) {
+    ulSheet = ss.insertSheet('พัสดุนอกบัญชี');
+    ulSheet.appendRow(['id', 'code', 'name', 'category', 'status', 'location', 'note', 'imageUrl', 'checkedAt']);
+  }
+
+  const finalUrls = [];
+  if (data.existingImageUrl) {
+    String(data.existingImageUrl).split(',').map(s => s.trim()).filter(Boolean).forEach(u => finalUrls.push(u));
+  }
+  if (Array.isArray(data.imageFiles) && data.imageFiles.length > 0) {
+    data.imageFiles.forEach(imgFile => {
+      const uploaded = uploadBase64Image(imgFile);
+      if (uploaded) finalUrls.push(uploaded);
+    });
+  } else if (data.imageFile && data.imageFile.data) {
+    const uploaded = uploadBase64Image(data.imageFile);
+    if (uploaded) finalUrls.push(uploaded);
+  }
+  const imageUrl = finalUrls.join(',');
+
+  const timestamp = data.checkedAt || getThaiTimestamp();
+  const id = data.id || ('UL_' + Date.now());
+
+  const lastRow = ulSheet.getLastRow();
+  let foundRow = -1;
+  if (lastRow > 1) {
+    const ids = ulSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(id)) {
+        foundRow = i + 2;
+        break;
+      }
+    }
+  }
+
+  const rowData = [
+    id,
+    data.code || '',
+    data.name || '',
+    data.category || 'ครุภัณฑ์นอกบัญชี',
+    data.status || 'usable',
+    data.location || '',
+    data.note || '',
+    imageUrl,
+    timestamp
+  ];
+
+  if (foundRow !== -1) {
+    ulSheet.getRange(foundRow, 1, 1, 9).setValues([rowData]);
+  } else {
+    ulSheet.appendRow(rowData);
+  }
+
+  return {
+    success: true,
+    message: 'บันทึกพัสดุนอกบัญชีเรียบร้อย',
+    id: id,
+    imageUrl: imageUrl,
+    checkedAt: timestamp
+  };
+}
+
+function deleteUnlistedRecord(data) {
+  const ss = getSpreadsheet();
+  const ulSheet = ss.getSheetByName('พัสดุนอกบัญชี');
+  if (!ulSheet) return { success: true };
+
+  const lastRow = ulSheet.getLastRow();
+  if (lastRow > 1) {
+    const ids = ulSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (let i = ids.length - 1; i >= 0; i--) {
+      if (String(ids[i][0]) === String(data.id)) {
+        ulSheet.deleteRow(i + 2);
+      }
+    }
+  }
+  return { success: true, message: 'ลบรายการนอกบัญชีเรียบร้อย' };
+}
+
+function getAllInspectionData() {
+  const ss = getSpreadsheet();
+  const inspections = {};
+  const unlisted = [];
+
+  const logSheet = ss.getSheetByName('InspectionLog');
+  if (logSheet && logSheet.getLastRow() > 1) {
+    const rows = logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 10).getDisplayValues();
+    rows.forEach(r => {
+      if (r[0]) {
+        inspections[r[0]] = {
+          id: r[0],
+          sheet: r[1],
+          rowIndex: r[2],
+          code: r[3],
+          name: r[4],
+          status: r[5],
+          location: r[6],
+          note: r[7],
+          imageUrl: r[8],
+          checkedAt: r[9]
+        };
+      }
+    });
+  }
+
+  const ulSheet = ss.getSheetByName('พัสดุนอกบัญชี');
+  if (ulSheet && ulSheet.getLastRow() > 1) {
+    const rows = ulSheet.getRange(2, 1, ulSheet.getLastRow() - 1, 9).getDisplayValues();
+    rows.forEach(r => {
+      if (r[0]) {
+        unlisted.push({
+          id: r[0],
+          code: r[1],
+          name: r[2],
+          category: r[3],
+          status: r[4],
+          location: r[5],
+          note: r[6],
+          imageUrl: r[7],
+          checkedAt: r[8]
+        });
+      }
+    });
+  }
+
+  return {
+    success: true,
+    inspections: inspections,
+    unlisted: unlisted
+  };
+}
+
+function syncBatchRecords(payload) {
+  const items = payload.items || [];
+  items.forEach(item => {
+    saveInspectionRecord(item);
+  });
+  const unlisted = payload.unlisted || [];
+  unlisted.forEach(ul => {
+    saveUnlistedRecord(ul);
+  });
+  return {
+    success: true,
+    message: `ซิงค์ข้อมูลสำเร็จ (${items.length} รายการในระบบ, ${unlisted.length} รายการนอกบัญชี)`
+  };
+}
+
