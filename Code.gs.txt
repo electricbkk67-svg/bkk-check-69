@@ -172,11 +172,10 @@ function saveInspectionRecord(data) {
     'lost': 5         // สูญไป
   };
 
-  // 1. อัปเดตลงชีตจริง (หากมีชีต "ช่าง" หรือ "ทีดินและสิ่งปลูกสร้าง" อยู่ในไฟล์ Google Sheets)
+  // 1. อัปเดตลงชีตจริง (ค้นหาแถวจาก รหัสพัสดุ / รหัสเต็ม / ลำดับ เพื่อป้องกันปัญหาเมื่อติด Filter หรือ Sort อยู่)
   const targetSheetName = data.sheet || 'ช่าง';
   const ws = ss.getSheetByName(targetSheetName);
-  if (ws && data.rowIndex) {
-    const rowIdx = parseInt(data.rowIndex, 10);
+  if (ws) {
     const isSheet1 = (targetSheetName === 'ช่าง');
     const startStatusCol = isSheet1 ? 11 : 12; // ช่าง: K(11)-P(16), ที่ดิน: L(12)-Q(17)
     const locCol = isSheet1 ? 17 : 18;
@@ -184,15 +183,59 @@ function saveInspectionRecord(data) {
     const imgCol = isSheet1 ? 20 : 21;
     const timeCol = isSheet1 ? 21 : 22;
 
-    const statusValues = [['', '', '', '', '', '']];
-    if (data.status && statusMap[data.status] !== undefined) {
-      statusValues[0][statusMap[data.status]] = '/';
+    const lastRow = ws.getLastRow();
+    let actualRow = -1;
+
+    if (lastRow >= 6) {
+      // ดึงข้อมูลคอลัมน์ A ถึง J มาตรวจสอบหาแถวที่ถูกต้อง
+      // Sheet ช่าง: Col A(0)=ลำดับ, Col D(3)=รหัสเต็ม, Col G(6)=เลขที่หรือรหัส, Col H(7)=ชื่อพัสดุ
+      // Sheet ที่ดิน: Col E(4)=ลำดับ, Col D(3)=รหัสเต็ม, Col H(7)=เลขที่หรือรหัส, Col I(8)=ชื่อพัสดุ
+      const maxColCheck = 10;
+      const values = ws.getRange(1, 1, lastRow, maxColCheck).getDisplayValues();
+
+      const searchCode = String(data.code || '').trim();
+      const searchFullCode = String(data.fullCode || '').trim();
+      const searchSeq = String(data.seq || '').trim();
+      const searchName = String(data.name || '').trim();
+
+      // ค้นหาแถวที่ตรงกันจริง
+      for (let r = 5; r < values.length; r++) {
+        const row = values[r];
+        const rowCode = isSheet1 ? String(row[6] || '').trim() : String(row[7] || '').trim();
+        const rowFullCode = String(row[3] || '').trim();
+        const rowSeq = isSheet1 ? String(row[0] || '').trim() : String(row[4] || '').trim();
+        const rowName = isSheet1 ? String(row[7] || '').trim() : String(row[8] || '').trim();
+
+        // ตรวจสอบความตรงกัน: เลขรหัสตรง หรือ (ลำดับตรงและชื่อตรง)
+        if (searchCode && rowCode && rowCode === searchCode) {
+          actualRow = r + 1;
+          break;
+        } else if (searchFullCode && rowFullCode && rowFullCode === searchFullCode) {
+          actualRow = r + 1;
+          break;
+        } else if (searchSeq && rowSeq && searchSeq === rowSeq && searchName && rowName && searchName === rowName) {
+          actualRow = r + 1;
+          break;
+        }
+      }
     }
-    ws.getRange(rowIdx, startStatusCol, 1, 6).setValues(statusValues);
-    if (data.location !== undefined) ws.getRange(rowIdx, locCol).setValue(data.location);
-    if (data.note !== undefined) ws.getRange(rowIdx, noteCol).setValue(data.note);
-    if (imageUrl) ws.getRange(rowIdx, imgCol).setValue(imageUrl);
-    ws.getRange(rowIdx, timeCol).setValue(timestamp);
+
+    // หากค้นหาในชีตไม่เจอ ให้ใช้ rowIndex เดิมเป็นตัวสำรอง
+    if (actualRow === -1 && data.rowIndex) {
+      actualRow = parseInt(data.rowIndex, 10);
+    }
+
+    if (actualRow > 0 && actualRow <= lastRow) {
+      const statusValues = [['', '', '', '', '', '']];
+      if (data.status && statusMap[data.status] !== undefined) {
+        statusValues[0][statusMap[data.status]] = '/';
+      }
+      ws.getRange(actualRow, startStatusCol, 1, 6).setValues(statusValues);
+      if (data.location !== undefined) ws.getRange(actualRow, locCol).setValue(data.location);
+      if (data.note !== undefined) ws.getRange(actualRow, noteCol).setValue(data.note);
+      if (imageUrl) ws.getRange(actualRow, imgCol).setValue(imageUrl);
+      ws.getRange(actualRow, timeCol).setValue(timestamp);
+    }
   }
 
   // 2. บันทึกลงชีตฐานข้อมูลสถานะ "InspectionLog"
