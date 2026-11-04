@@ -146,6 +146,12 @@
         title="สลับหมวดบัญชีพัสดุ">
         <span>🔄</span> <span id="sheetSwitchText">ดูที่ดิน/สิ่งปลูกสร้าง</span>
       </button>
+      <!-- ปุ่มติดตั้งแอป (PWA) -->
+      <button type="button" id="pwaInstallBtn" onclick="installPWA()"
+        class="px-2 py-1.5 rounded-lg bg-emerald-700/80 hover:bg-emerald-600 active:scale-95 border border-emerald-500/50 text-emerald-100 text-xs font-semibold flex items-center gap-1 transition shadow-sm"
+        title="ติดตั้งแอปลงเครื่อง">
+        <span>📲</span> <span class="hidden sm:inline">ติดตั้ง</span>
+      </button>
       <!-- ปุ่มตั้งค่า Cloud -->
       <button type="button" onclick="openCloudModal()"
         class="p-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-300 hover:text-white text-xs transition"
@@ -2206,6 +2212,57 @@
     function escapeAttr(str) {
       return String(str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
     }
+
+    // ==========================================
+    // PWA & Service Worker Registration
+    // ==========================================
+    let deferredPrompt = null;
+
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').then((reg) => {
+          console.log('✅ ServiceWorker registered with scope:', reg.scope);
+        }).catch((err) => {
+          console.warn('⚠️ ServiceWorker registration failed:', err);
+        });
+      });
+    }
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const btn = document.getElementById('pwaInstallBtn');
+      if (btn) {
+        btn.classList.add('animate-pulse');
+        btn.classList.remove('bg-emerald-700/80');
+        btn.classList.add('bg-emerald-600');
+      }
+    });
+
+    window.addEventListener('appinstalled', () => {
+      deferredPrompt = null;
+      showToast('ติดตั้งแอปบนอุปกรณ์เรียบร้อยแล้ว!');
+    });
+
+    window.installPWA = async function() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          showToast('กำลังติดตั้งแอป...');
+        }
+        deferredPrompt = null;
+      } else {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        if (isIOS) {
+          alert("📲 วิธีติดตั้งบน iPhone / iPad:\n\n1. แตะปุ่มแชร์ (สัญลักษณ์สี่เหลี่ยมลูกศรชี้ขึ้น ⎋ ด้านล่างของ Safari)\n2. เลื่อนลงมาแตะเลือก 'เพิ่มไปยังหน้าจอโฮม' (Add to Home Screen)\n3. แตะ 'เพิ่ม' (Add) ที่มุมบนขวา");
+        } else if (location.protocol === 'file:') {
+          alert("💡 แนะนำการติดตั้ง:\n\nขณะนี้เปิดไฟล์แบบ Offline (file://) อยู่ในเครื่อง จึงยังไม่สามารถติดตั้งเป็นแอปได้โดยตรง\n\nเมื่ออัปโหลดไฟล์ชุดนี้ขึ้น GitHub Pages (HTTPS) แล้วเปิดผ่านเบราว์เซอร์:\n1. เบราว์เซอร์จะมีปุ่ม 'ติดตั้งแอป' ขึ้นให้อัตโนมัติที่แถบ URL หรือกดปุ่ม 📲 ติดตั้ง ได้ทันที\n2. หรือกดเมนู 3 จุด (⋮) ของ Chrome -> เลือก 'ติดตั้งแอป' หรือ 'เพิ่มลงในหน้าจอหลัก'");
+        } else {
+          alert("📲 วิธีติดตั้งแอปลงเครื่อง:\n\nแตะเมนู 3 จุด (⋮) ที่มุมขวาบนของเบราว์เซอร์ Chrome/Edge\nแล้วเลือก 'ติดตั้งแอป' (Install app) หรือ 'เพิ่มลงในหน้าจอหลัก' (Add to Home screen)");
+        }
+      }
+    };
   </script>
 </body>
 </html>
