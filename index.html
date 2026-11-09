@@ -2290,11 +2290,15 @@
       })
       .then(r => r.json())
       .then(res => {
-        document.getElementById('cloudSyncMsg').innerHTML = '<span class="text-emerald-400">✅ ' + (res.message || 'ซิงค์สำเร็จ') + '</span>';
-        showToast('ส่งข้อมูลทั้งหมดขึ้น Google Sheets เรียบร้อย!');
-        const dot = document.getElementById('cloudStatusDot');
-        if (dot) {
-          dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shrink-0';
+        if (res && res.success) {
+          document.getElementById('cloudSyncMsg').innerHTML = '<span class="text-emerald-400">✅ ' + (res.message || 'ซิงค์สำเร็จ') + '</span>';
+          showToast('ส่งข้อมูลทั้งหมดขึ้น Google Sheets เรียบร้อย!');
+          const dot = document.getElementById('cloudStatusDot');
+          if (dot) {
+            dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shrink-0';
+          }
+        } else {
+          document.getElementById('cloudSyncMsg').innerHTML = '<span class="text-red-400">❌ ' + ((res && res.message) || 'เกิดข้อผิดพลาดในการบันทึก') + '</span>';
         }
       })
       .catch(err => {

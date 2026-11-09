@@ -586,17 +586,216 @@ function getAllInspectionData() {
 }
 
 function syncBatchRecords(payload) {
+  const ss = getSpreadsheet();
   const items = payload.items || [];
-  items.forEach(item => {
-    saveInspectionRecord(item);
-  });
   const unlisted = payload.unlisted || [];
-  unlisted.forEach(ul => {
-    saveUnlistedRecord(ul);
+  const statusMap = {
+    'usable': 0,
+    'damaged': 1,
+    'deteriorated': 2,
+    'unneeded': 3,
+    'missing': 4,
+    'lost': 5
+  };
+
+  // แยกรายการตามชีต
+  const sheet1Items = [];
+  const sheet2Items = [];
+  items.forEach(it => {
+    const sName = String(it.sheet || '').trim();
+    if (sName.indexOf('ดิน') !== -1) {
+      sheet2Items.push(it);
+    } else {
+      sheet1Items.push(it);
+    }
   });
+
+  // 1. อัปเดตชีต 1 ("ช่าง") แบบ Batch ครั้งเดียว
+  if (sheet1Items.length > 0) {
+    const ws1 = ss.getSheetByName('ช่าง');
+    if (ws1 && ws1.getLastRow() >= 6) {
+      const lastRow = ws1.getLastRow();
+      const numDataRows = lastRow - 5; // แถว 6 ถึง lastRow
+      const lookupValues = ws1.getRange(6, 1, numDataRows, 10).getDisplayValues();
+
+      // ป้องกันเรื่องขนาดคอลัมน์เกินขอบเขตตารางของชีต (ช่างมีปกติถึง Col S = 19)
+      const maxCols1 = ws1.getMaxColumns();
+      const numWriteCols = (maxCols1 >= 21) ? 11 : 9; // 9 คอลัมน์คือ K(11) ถึง S(19)
+      const targetValues = ws1.getRange(6, 11, numDataRows, numWriteCols).getValues();
+
+      const rowMapByCode = {};
+      const rowMapByFullCode = {};
+      const rowMapBySeqName = {};
+
+      for (let i = 0; i < lookupValues.length; i++) {
+        const row = lookupValues[i];
+        const rowSeq = String(row[0] || '').trim();
+        const rowFullCode = String(row[3] || '').trim();
+        const rowCode = String(row[6] || '').trim();
+        const rowName = String(row[7] || '').trim();
+
+        if (rowCode) rowMapByCode[rowCode] = i;
+        if (rowFullCode) rowMapByFullCode[rowFullCode] = i;
+        if (rowSeq && rowName) rowMapBySeqName[rowSeq + '|||' + rowName] = i;
+      }
+
+      sheet1Items.forEach(it => {
+        const sCode = String(it.code || '').trim();
+        const sFull = String(it.fullCode || '').trim();
+        const sSeq = String(it.seq || '').trim();
+        const sName = String(it.name || '').trim();
+
+        let rowIdx = -1;
+        if (sCode && rowMapByCode[sCode] !== undefined) rowIdx = rowMapByCode[sCode];
+        else if (sFull && rowMapByFullCode[sFull] !== undefined) rowIdx = rowMapByFullCode[sFull];
+        else if (sSeq && sName && rowMapBySeqName[sSeq + '|||' + sName] !== undefined) rowIdx = rowMapBySeqName[sSeq + '|||' + sName];
+        else if (it.rowIndex && it.rowIndex >= 6 && (it.rowIndex - 6) < numDataRows) rowIdx = it.rowIndex - 6;
+
+        if (rowIdx >= 0) {
+          for (let c = 0; c < 6; c++) targetValues[rowIdx][c] = '';
+          if (it.status && statusMap[it.status] !== undefined) {
+            targetValues[rowIdx][statusMap[it.status]] = '/';
+          }
+          if (it.location !== undefined && it.location !== '') targetValues[rowIdx][6] = it.location; // Col Q
+          // targetValues[rowIdx][7] คือ Col R (เจ้าของงบประมาณ) คงเดิมไว้
+          if (it.note !== undefined && it.note !== '') targetValues[rowIdx][8] = it.note; // Col S
+          if (numWriteCols >= 11) {
+            if (it.imageUrl) targetValues[rowIdx][9] = it.imageUrl; // Col T
+            targetValues[rowIdx][10] = it.checkedAt || getThaiTimestamp(); // Col U
+          }
+        }
+      });
+
+      ws1.getRange(6, 11, numDataRows, numWriteCols).setValues(targetValues);
+    }
+  }
+
+  // 2. อัปเดตชีต 2 ("ทีดินและสิ่งปลูกสร้าง") แบบ Batch ครั้งเดียว
+  if (sheet2Items.length > 0) {
+    let ws2 = ss.getSheetByName('ทีดินและสิ่งปลูกสร้าง') || ss.getSheetByName('ที่ดินและสิ่งปลูกสร้าง');
+    if (ws2 && ws2.getLastRow() >= 7) {
+      const lastRow = ws2.getLastRow();
+      const numDataRows = lastRow - 6; // แถว 7 ถึง lastRow
+      const lookupValues = ws2.getRange(7, 1, numDataRows, 11).getDisplayValues();
+
+      // ป้องกันเรื่องขนาดคอลัมน์เกินขอบเขตตารางของชีต (ที่ดินมีปกติถึง Col T = 20)
+      const maxCols2 = ws2.getMaxColumns();
+      const numWriteCols = (maxCols2 >= 22) ? 11 : 9; // 9 คอลัมน์คือ L(12) ถึง T(20)
+      const targetValues = ws2.getRange(7, 12, numDataRows, numWriteCols).getValues();
+
+      const rowMapByCode = {};
+      const rowMapByFullCode = {};
+      const rowMapBySeqName = {};
+
+      for (let i = 0; i < lookupValues.length; i++) {
+        const row = lookupValues[i];
+        const rowFullCode = String(row[3] || '').trim();
+        const rowSeq = String(row[4] || '').trim();
+        const rowCode = String(row[7] || '').trim();
+        const rowName = String(row[8] || '').trim();
+
+        if (rowCode) rowMapByCode[rowCode] = i;
+        if (rowFullCode) rowMapByFullCode[rowFullCode] = i;
+        if (rowSeq && rowName) rowMapBySeqName[rowSeq + '|||' + rowName] = i;
+      }
+
+      sheet2Items.forEach(it => {
+        const sCode = String(it.code || '').trim();
+        const sFull = String(it.fullCode || '').trim();
+        const sSeq = String(it.seq || '').trim();
+        const sName = String(it.name || '').trim();
+
+        let rowIdx = -1;
+        if (sCode && rowMapByCode[sCode] !== undefined) rowIdx = rowMapByCode[sCode];
+        else if (sFull && rowMapByFullCode[sFull] !== undefined) rowIdx = rowMapByFullCode[sFull];
+        else if (sSeq && sName && rowMapBySeqName[sSeq + '|||' + sName] !== undefined) rowIdx = rowMapBySeqName[sSeq + '|||' + sName];
+        else if (it.rowIndex && it.rowIndex >= 7 && (it.rowIndex - 7) < numDataRows) rowIdx = it.rowIndex - 7;
+
+        if (rowIdx >= 0) {
+          for (let c = 0; c < 6; c++) targetValues[rowIdx][c] = '';
+          if (it.status && statusMap[it.status] !== undefined) {
+            targetValues[rowIdx][statusMap[it.status]] = '/';
+          }
+          if (it.location !== undefined && it.location !== '') targetValues[rowIdx][6] = it.location; // Col R
+          // targetValues[rowIdx][7] คือ Col S (เจ้าของงบประมาณ) คงเดิมไว้
+          if (it.note !== undefined && it.note !== '') targetValues[rowIdx][8] = it.note; // Col T
+          if (numWriteCols >= 11) {
+            if (it.imageUrl) targetValues[rowIdx][9] = it.imageUrl; // Col U
+            targetValues[rowIdx][10] = it.checkedAt || getThaiTimestamp(); // Col V
+          }
+        }
+      });
+
+      ws2.getRange(7, 12, numDataRows, numWriteCols).setValues(targetValues);
+    }
+  }
+
+  // 3. อัปเดตชีต "InspectionLog" แบบ Batch ครบทุกรายการแน่นอน 100%
+  const LOG_COLS = 10;
+  let logSheet = ss.getSheetByName('InspectionLog');
+  if (!logSheet) {
+    logSheet = ss.insertSheet('InspectionLog');
+  }
+  // ปรับขนาดคอลัมน์ของชีต InspectionLog ให้มีอย่างน้อย 10 คอลัมน์
+  if (logSheet.getMaxColumns() < LOG_COLS) {
+    logSheet.insertColumnsAfter(logSheet.getMaxColumns(), LOG_COLS - logSheet.getMaxColumns());
+  }
+
+  const lastLogRow = logSheet.getLastRow();
+  let existingLogData = [];
+  const logMapById = {};
+
+  if (lastLogRow > 0) {
+    // อ่านเฉพาะ 10 คอลัมน์แรก เพื่อให้ขนาดอาร์เรย์เป็น 10 คอลัมน์เสมอ
+    existingLogData = logSheet.getRange(1, 1, lastLogRow, LOG_COLS).getValues();
+    for (let r = 1; r < existingLogData.length; r++) {
+      const logId = String(existingLogData[r][0] || '').trim();
+      if (logId) logMapById[logId] = r;
+    }
+  } else {
+    existingLogData.push(['id', 'sheet', 'rowIndex', 'code', 'name', 'status', 'location', 'note', 'imageUrl', 'checkedAt']);
+  }
+
+  const newLogRows = [];
+  items.forEach(it => {
+    const itId = String(it.id || '').trim();
+    const rowData = [
+      it.id || '',
+      it.sheet || 'ช่าง',
+      it.rowIndex || '',
+      it.code || '',
+      it.name || '',
+      it.status || '',
+      it.location || '',
+      it.note || '',
+      it.imageUrl || '',
+      it.checkedAt || getThaiTimestamp()
+    ];
+
+    if (itId && logMapById[itId] !== undefined) {
+      existingLogData[logMapById[itId]] = rowData;
+    } else {
+      newLogRows.push(rowData);
+      logMapById[itId] = existingLogData.length + newLogRows.length - 1;
+    }
+  });
+
+  // รวมข้อมูลทั้งหมดเขียนลงชีตใน 1 คำสั่งเดียว (ไม่มีทางหลุดหรือขาดหาย)
+  const allLogData = existingLogData.concat(newLogRows);
+  if (allLogData.length > 0) {
+    logSheet.getRange(1, 1, allLogData.length, LOG_COLS).setValues(allLogData);
+  }
+
+  // 4. พัสดุนอกบัญชี
+  if (unlisted.length > 0) {
+    unlisted.forEach(ul => {
+      saveUnlistedRecord(ul);
+    });
+  }
+
   return {
     success: true,
-    message: `ซิงค์ข้อมูลสำเร็จ (${items.length} รายการในระบบ, ${unlisted.length} รายการนอกบัญชี)`
+    message: `ซิงค์ข้อมูลสำเร็จ (${items.length} รายการ: กองช่าง ${sheet1Items.length}, ที่ดิน/สิ่งปลูกสร้าง ${sheet2Items.length})`
   };
 }
 
