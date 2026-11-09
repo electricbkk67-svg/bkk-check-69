@@ -14,20 +14,83 @@
  * 6. คัดลอก URL ของเว็บแอป ไปวางในปุ่ม "ตั้งค่า Cloud / Google Sheets" ในหน้าแอป
  */
 
-const SPREADSHEET_ID = ''; // ใส่ Spreadsheet ID ที่นี่ (หรือเว้นว่างไว้หากสร้าง Script ในไฟล์ Google Sheets นั้นโดยตรง)
-const FOLDER_ID = '';      // ใส่ Folder ID ของ Google Drive สำหรับเก็บรูปถ่ายพัสดุ (ถ้าไม่ใส่จะสร้างโฟลเดอร์ให้อัตโนมัติ)
+const SPREADSHEET_ID = '1mDYlCX3TCY2mmGAytl6S7udFgt3BV5AWz7tm5KSgh_U'; // ใส่ Spreadsheet ID หรือวางลิงก์ Google Sheets ทั้งหมดที่นี่
+const FOLDER_ID = '1TH0qnjf4DjDNuipY3gxrnkqcW53kMP19';      // ใส่ Folder ID หรือลิงก์โฟลเดอร์ Google Drive สำหรับเก็บรูป (ถ้าไม่ใส่จะสร้างให้อัตโนมัติ)
+
+function extractSpreadsheetId(input) {
+  if (!input) return '';
+  const str = String(input).trim();
+  const match = str.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (match && match[1]) return match[1];
+  const match2 = str.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (match2 && match2[1]) return match2[1];
+  return str;
+}
+
+function extractFolderId(input) {
+  if (!input) return '';
+  const str = String(input).trim();
+  const match = str.match(/\/folders\/([a-zA-Z0-9-_]+)/);
+  if (match && match[1]) return match[1];
+  return str;
+}
 
 function getSpreadsheet() {
-  if (SPREADSHEET_ID && SPREADSHEET_ID.trim() !== '') {
-    return SpreadsheetApp.openById(SPREADSHEET_ID.trim());
+  let ss = null;
+  const rawId = (typeof SPREADSHEET_ID !== 'undefined') ? SPREADSHEET_ID : '';
+  const cleanId = extractSpreadsheetId(rawId);
+
+  // 1. ลองเปิดจาก SPREADSHEET_ID (รองรับทั้ง ID และ Full URL ลิงก์ชีต)
+  if (cleanId && cleanId !== '') {
+    try {
+      ss = SpreadsheetApp.openById(cleanId);
+    } catch (err) {
+      Logger.log('openById error: ' + err.toString());
+    }
   }
-  return SpreadsheetApp.getActiveSpreadsheet();
+
+  // 2. ถ้ายังไม่ได้ ให้ลองดึง Active Spreadsheet (กรณีเปิด Script จากเมนู ส่วนขยาย > Apps Script)
+  if (!ss) {
+    try {
+      ss = SpreadsheetApp.getActiveSpreadsheet();
+    } catch (err) {
+      Logger.log('getActiveSpreadsheet error: ' + err.toString());
+    }
+  }
+
+  // 3. Fallback อัตโนมัติ: ค้นหาไฟล์ชีตชื่อ "ตรวจสอบพัสดุ 2569" จาก Google Drive
+  if (!ss) {
+    try {
+      const candidates = ['ตรวจสอบพัสดุ 2569', 'ตรวจสอบพัสดุ 2569 (ส่งกองคลัง)'];
+      for (let i = 0; i < candidates.length; i++) {
+        const files = DriveApp.getFilesByName(candidates[i]);
+        while (files.hasNext()) {
+          const file = files.next();
+          try {
+            ss = SpreadsheetApp.openById(file.getId());
+            if (ss) break;
+          } catch (e) {}
+        }
+        if (ss) break;
+      }
+    } catch (err) {
+      Logger.log('Auto search spreadsheet error: ' + err.toString());
+    }
+  }
+
+  // 4. หากยังไม่พบ แจ้งเตือนข้อความภาษาไทยอย่างชัดเจน
+  if (!ss) {
+    throw new Error('ไม่พบไฟล์ Google Sheets! กรุณานำลิงก์ Google Sheets (หรือ ID) ไปวางที่บรรทัด SPREADSHEET_ID ในไฟล์ Code.gs แล้ว Deploy เวอร์ชันใหม่ครับ');
+  }
+
+  return ss;
 }
 
 function getUploadFolder() {
   if (FOLDER_ID && FOLDER_ID.trim() !== '') {
     try {
-      return DriveApp.getFolderById(FOLDER_ID.trim());
+      const cleanFolderId = extractFolderId(FOLDER_ID);
+      return DriveApp.getFolderById(cleanFolderId);
     } catch (e) {}
   }
   const folders = DriveApp.getFoldersByName('รูปภาพตรวจสอบพัสดุ_2569');
@@ -180,7 +243,10 @@ function saveInspectionRecord(data) {
 
   // 1. อัปเดตลงชีตจริง (ค้นหาแถวจาก รหัสพัสดุ / รหัสเต็ม / ลำดับ เพื่อป้องกันปัญหาเมื่อติด Filter หรือ Sort อยู่)
   const targetSheetName = data.sheet || 'ช่าง';
-  const ws = ss.getSheetByName(targetSheetName);
+  let ws = ss.getSheetByName(targetSheetName);
+  if (!ws && (targetSheetName.indexOf('ดิน') !== -1)) {
+    ws = ss.getSheetByName('ที่ดินและสิ่งปลูกสร้าง') || ss.getSheetByName('ทีดินและสิ่งปลูกสร้าง');
+  }
   if (ws) {
     const isSheet1 = (targetSheetName === 'ช่าง');
     const startStatusCol = isSheet1 ? 11 : 12; // ช่าง: K(11)-P(16), ที่ดิน: L(12)-Q(17)
@@ -297,7 +363,10 @@ function saveInspectionRecord(data) {
 function clearInspectionRecord(data) {
   const ss = getSpreadsheet();
   const targetSheetName = data.sheet || 'ช่าง';
-  const ws = ss.getSheetByName(targetSheetName);
+  let ws = ss.getSheetByName(targetSheetName);
+  if (!ws && (targetSheetName.indexOf('ดิน') !== -1)) {
+    ws = ss.getSheetByName('ที่ดินและสิ่งปลูกสร้าง') || ss.getSheetByName('ทีดินและสิ่งปลูกสร้าง');
+  }
 
   if (ws) {
     const isSheet1 = (targetSheetName === 'ช่าง');
