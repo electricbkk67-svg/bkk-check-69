@@ -671,10 +671,15 @@
         <button type="button" onclick="closeCloudModal()" class="text-slate-400 hover:text-white text-xs font-bold px-2 py-1">✕</button>
       </div>
       <p class="text-xs text-slate-400 leading-relaxed">
-        แอปนี้บันทึกข้อมูลลงในเครื่องอัตโนมัติ (ใช้งานออฟไลน์ได้ทันที) และหากต้องการให้ข้อมูลซิงค์ออนไลน์ร่วมกันหลายเครื่องเหมือนแอปตรวจไฟทาง ให้นำโค้ดในไฟล์ <code class="text-amber-300">Code.gs.txt</code> ไปวางใน Google Apps Script แล้วนำ <b>Web App URL</b> มาใส่ด้านล่างครับ
+        แอปนี้บันทึกข้อมูลลงในเครื่องอัตโนมัติ (ใช้งานออฟไลน์ได้ทันที) และสามารถซิงค์ขึ้น Google Sheets ออนไลน์ได้ โดยใส่ <b>Web App URL</b> ที่ช่องด้านล่างนี้ หรือจะใส่ไว้ในโค้ด <code class="text-amber-300">index.html</code> (ตรงตัวแปร <code class="text-amber-300">DEFAULT_GAS_URL</code>) ก็ได้เช่นกันครับ
       </p>
       <div>
-        <label class="block text-xs font-semibold text-slate-300 mb-1">Google Apps Script Web App URL</label>
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-xs font-semibold text-slate-300">Google Apps Script Web App URL</label>
+          <button type="button" onclick="resetToDefaultGasUrl()" class="text-[11px] text-blue-400 hover:text-blue-300 underline" title="คลิกเพื่อดึง URL เริ่มต้นจากโค้ดมาใส่">
+            🔄 ใช้ URL จากโค้ด
+          </button>
+        </div>
         <input type="url" id="gasUrlInput" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-3 py-2 rounded-xl text-xs font-mono">
       </div>
       <div class="flex flex-wrap gap-2 pt-1">
@@ -710,6 +715,23 @@
     const STORAGE_KEY_UNLISTED    = 'bkk_asset_unlisted_2569_v1';
     const STORAGE_KEY_CUSTOM_DATA = 'bkk_asset_custom_sheets_2569_v1';
     const STORAGE_KEY_GAS_URL     = 'bkk_asset_gas_url_2569';
+
+    // =========================================================================
+    // 🌐 ตั้งค่า Google Apps Script Web App URL เริ่มต้นในโค้ด
+    // (สามารถใส่ URL ตรงนี้ไว้ในโค้ดได้เลย หรือจะกรอก/แก้ไขที่หน้าแอปผ่านปุ่ม ☁️ ก็นำมาใช้ได้เช่นกัน)
+    // =========================================================================
+    const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwPDVtdicLQHqGJIr2JBNgk4LJbctvpzSQV6UGdumwq8OpnVNr9H21gHWYSkmc-7RDUSw/exec'; // <-- ใส่ Web App URL ที่นี่ เช่น 'https://script.google.com/macros/s/.../exec'
+
+    function getGasUrl() {
+      const custom = localStorage.getItem(STORAGE_KEY_GAS_URL);
+      if (custom && custom.trim()) {
+        return custom.trim();
+      }
+      if (typeof DEFAULT_GAS_URL !== 'undefined' && DEFAULT_GAS_URL && DEFAULT_GAS_URL.trim()) {
+        return DEFAULT_GAS_URL.trim();
+      }
+      return '';
+    }
 
     const STATUS_META = {
       usable:       { label: 'มี • ใช้ได้',       short: 'ใช้ได้',       icon: '✅', badgeCls: 'bg-emerald-950/90 text-emerald-300 border-emerald-600/60', colOffset: 0 },
@@ -766,9 +788,10 @@
       }
 
       // If Google Apps Script URL is configured, pull latest in background
-      const gasUrl = localStorage.getItem(STORAGE_KEY_GAS_URL);
+      const gasUrl = getGasUrl();
       if (gasUrl) {
-        document.getElementById('gasUrlInput').value = gasUrl;
+        const input = document.getElementById('gasUrlInput');
+        if (input) input.value = gasUrl;
         pullFromCloud(true);
       }
     });
@@ -1562,12 +1585,34 @@
 
     window.clearItemInspection = function() {
       if (!activeModalItemId) return;
-      delete inspectionsMap[activeModalItemId];
+      const itemId = activeModalItemId;
+      const raw = findRawItemById(itemId);
+
+      if (!confirm(`ยืนยันล้างผลการตรวจของ "${raw ? raw.code + ' ' + raw.name : itemId}" ใช่หรือไม่?\n(ระบบจะล้างผลการตรวจใน Google Sheets ด้วย)`)) {
+        return;
+      }
+
+      const clearData = {
+        id: itemId,
+        sheet: raw ? raw.sheet : (currentSheetKey === 'sheet1' ? 'ช่าง' : 'ทีดินและสิ่งปลูกสร้าง'),
+        rowIndex: raw ? raw.rowIndex : null,
+        code: raw ? raw.code : '',
+        fullCode: raw ? (raw.fullCode || '') : '',
+        seq: raw ? (raw.seq || '') : '',
+        name: raw ? raw.name : '',
+        originalLocation: raw ? (raw.location || '') : '',
+        originalNote: raw ? (raw.note || '') : ''
+      };
+
+      delete inspectionsMap[itemId];
       saveLocalState();
       closeInspectModal();
       renderSearchArea();
       renderFullList();
-      showToast('ล้างผลการตรวจของรายการนี้แล้ว');
+      showToast(`ล้างผลการตรวจ "${raw ? raw.code : itemId}" แล้ว`);
+
+      // ซิงค์คำสั่งล้างข้อมูลไปยัง Google Sheets
+      syncClearItemToCloud(clearData);
     };
 
     // =====================================================
@@ -1667,11 +1712,12 @@
     };
 
     window.deleteUnlistedItem = function(id) {
-      if (!confirm('ยืนยันลบรายการพัสดุนอกบัญชีนี้?')) return;
+      if (!confirm('ยืนยันลบรายการพัสดุนอกบัญชีนี้? (ระบบจะลบออกจาก Google Sheets ด้วย)')) return;
       unlistedItems = unlistedItems.filter(x => x.id !== id);
       saveLocalState();
       renderFullList();
       showToast('ลบรายการนอกบัญชีแล้ว');
+      syncDeleteUnlistedToCloud(id);
     };
 
     // =====================================================
@@ -2016,6 +2062,23 @@
     // CLOUD SYNC (GOOGLE APPS SCRIPT / GOOGLE SHEETS)
     // =====================================================
     window.openCloudModal = function() {
+      const activeUrl = getGasUrl();
+      const input = document.getElementById('gasUrlInput');
+      if (input) input.value = activeUrl;
+
+      const msg = document.getElementById('cloudSyncMsg');
+      if (msg) {
+        const customUrl = localStorage.getItem(STORAGE_KEY_GAS_URL);
+        const codeUrl = (typeof DEFAULT_GAS_URL !== 'undefined') ? DEFAULT_GAS_URL.trim() : '';
+        if (customUrl) {
+          msg.innerHTML = '<span class="text-blue-400 font-medium">💡 กำลังใช้งาน URL ที่ตั้งค่าไว้ในหน้านี้</span>';
+        } else if (codeUrl) {
+          msg.innerHTML = '<span class="text-emerald-400 font-medium">💡 กำลังใช้งาน URL เริ่มต้นที่ระบุไว้ในโค้ด</span>';
+        } else {
+          msg.innerHTML = '<span class="text-amber-400 font-medium">⚠️ ยังไม่ได้ระบุ Web App URL</span>';
+        }
+      }
+
       const modal = document.getElementById('cloudModal');
       modal.classList.remove('hidden');
       modal.classList.add('flex');
@@ -2029,13 +2092,40 @@
 
     window.saveCloudConfig = function() {
       const url = document.getElementById('gasUrlInput').value.trim();
-      localStorage.setItem(STORAGE_KEY_GAS_URL, url);
-      document.getElementById('cloudSyncMsg').innerText = url ? '✅ บันทึก URL เรียบร้อยแล้ว' : 'ยกเลิกการเชื่อม Cloud แล้ว';
-      showToast('บันทึกการตั้งค่า Cloud แล้ว');
+      if (url) {
+        localStorage.setItem(STORAGE_KEY_GAS_URL, url);
+        document.getElementById('cloudSyncMsg').innerHTML = '<span class="text-emerald-400">✅ บันทึก Web App URL เรียบร้อยแล้ว</span>';
+        showToast('บันทึกการตั้งค่า Cloud แล้ว');
+      } else {
+        localStorage.removeItem(STORAGE_KEY_GAS_URL);
+        const codeUrl = (typeof DEFAULT_GAS_URL !== 'undefined') ? DEFAULT_GAS_URL.trim() : '';
+        if (codeUrl) {
+          document.getElementById('gasUrlInput').value = codeUrl;
+          document.getElementById('cloudSyncMsg').innerHTML = '<span class="text-emerald-400">🔄 กลับไปใช้ URL เริ่มต้นจากในโค้ด</span>';
+          showToast('ใช้ URL เริ่มต้นจากในโค้ด');
+        } else {
+          document.getElementById('cloudSyncMsg').innerText = 'ยกเลิกการเชื่อม Cloud แล้ว';
+          showToast('ยกเลิกการเชื่อม Cloud');
+        }
+      }
+    };
+
+    window.resetToDefaultGasUrl = function() {
+      localStorage.removeItem(STORAGE_KEY_GAS_URL);
+      const codeUrl = (typeof DEFAULT_GAS_URL !== 'undefined') ? DEFAULT_GAS_URL.trim() : '';
+      const input = document.getElementById('gasUrlInput');
+      if (input) input.value = codeUrl;
+      const msg = document.getElementById('cloudSyncMsg');
+      if (codeUrl) {
+        if (msg) msg.innerHTML = '<span class="text-emerald-400">🔄 รีเซ็ตกลับไปใช้ URL เริ่มต้นจากในโค้ดแล้ว</span>';
+        showToast('ใช้ URL เริ่มต้นจากในโค้ด');
+      } else {
+        if (msg) msg.innerHTML = '<span class="text-amber-400">💡 ในโค้ด (index.html) ยังไม่ได้ใส่ค่าใน DEFAULT_GAS_URL</span>';
+      }
     };
 
     function syncSingleItemToCloud(record) {
-      const gasUrl = localStorage.getItem(STORAGE_KEY_GAS_URL);
+      const gasUrl = getGasUrl();
       if (!gasUrl) return;
       const imgs = parseImageList(record);
       const imageFiles = [];
@@ -2055,6 +2145,7 @@
 
       fetch(gasUrl, {
         method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       })
       .then(r => r.json())
@@ -2064,12 +2155,46 @@
           inspectionsMap[record.id].images = parseImageList({ imageUrl: res.imageUrl });
           saveLocalState();
         }
+        const dot = document.getElementById('cloudStatusDot');
+        if (dot) {
+          dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shrink-0';
+          dot.title = 'ซิงค์สำเร็จล่าสุด';
+        }
       })
-      .catch(() => {});
+      .catch(err => {
+        console.warn('Sync single item error:', err);
+      });
+    }
+
+    function syncClearItemToCloud(clearData) {
+      const gasUrl = getGasUrl();
+      if (!gasUrl) return;
+
+      const payload = Object.assign({ action: 'clearInspection' }, clearData);
+
+      fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res && res.success) {
+          console.log('✅ ล้างข้อมูลในชีทเรียบร้อย:', clearData.code);
+          const dot = document.getElementById('cloudStatusDot');
+          if (dot) {
+            dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shrink-0';
+            dot.title = 'ล้างผลตรวจในชีทแล้ว';
+          }
+        }
+      })
+      .catch(err => {
+        console.warn('Cloud sync clear error:', err);
+      });
     }
 
     function syncUnlistedToCloud(item) {
-      const gasUrl = localStorage.getItem(STORAGE_KEY_GAS_URL);
+      const gasUrl = getGasUrl();
       if (!gasUrl) return;
       const imgs = parseImageList(item);
       const imageFiles = [];
@@ -2085,13 +2210,35 @@
         imageFiles: imageFiles,
         existingImageUrl: existingUrls.join(',')
       });
-      fetch(gasUrl, { method: 'POST', body: JSON.stringify(payload) }).catch(() => {});
+      fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      }).catch(err => console.warn('Sync unlisted error:', err));
+    }
+
+    function syncDeleteUnlistedToCloud(id) {
+      const gasUrl = getGasUrl();
+      if (!gasUrl) return;
+
+      fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'deleteUnlisted', id: id })
+      })
+      .then(r => r.json())
+      .then(res => {
+        console.log('✅ ลบรายการพัสดุนอกบัญชีในชีทสำเร็จ:', id);
+      })
+      .catch(err => {
+        console.warn('Delete unlisted cloud error:', err);
+      });
     }
 
     window.pullFromCloud = function(silent = false) {
-      const gasUrl = localStorage.getItem(STORAGE_KEY_GAS_URL) || document.getElementById('gasUrlInput').value.trim();
+      const gasUrl = getGasUrl();
       if (!gasUrl) {
-        if (!silent) alert('กรุณาวาง Google Apps Script Web App URL ก่อนครับ');
+        if (!silent) alert('กรุณาระบุ Google Apps Script Web App URL ก่อนครับ');
         return;
       }
       if (!silent) document.getElementById('cloudSyncMsg').innerText = '⏳ กำลังดึงข้อมูลจาก Google Sheets...';
@@ -2109,26 +2256,32 @@
             renderSearchArea();
             renderFullList();
             if (!silent) {
-              document.getElementById('cloudSyncMsg').innerText = '✅ ดึงข้อมูลจาก Google Sheets สำเร็จ!';
+              document.getElementById('cloudSyncMsg').innerHTML = '<span class="text-emerald-400">✅ ดึงข้อมูลจาก Google Sheets สำเร็จ!</span>';
               showToast('ซิงค์ข้อมูลจาก Google Sheets สำเร็จ!');
+            }
+            const dot = document.getElementById('cloudStatusDot');
+            if (dot) {
+              dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shrink-0';
+              dot.title = 'ซิงค์สำเร็จล่าสุด: ' + (new Date()).toLocaleTimeString();
             }
           }
         })
         .catch(err => {
-          if (!silent) document.getElementById('cloudSyncMsg').innerText = '❌ ดึงข้อมูลไม่สำเร็จ: ' + err.message;
+          if (!silent) document.getElementById('cloudSyncMsg').innerHTML = '<span class="text-red-400">❌ ดึงข้อมูลไม่สำเร็จ: ' + err.message + '</span>';
         });
     };
 
     window.pushAllToCloud = function() {
-      const gasUrl = localStorage.getItem(STORAGE_KEY_GAS_URL) || document.getElementById('gasUrlInput').value.trim();
+      const gasUrl = getGasUrl();
       if (!gasUrl) {
-        alert('กรุณาวาง Google Apps Script Web App URL ก่อนครับ');
+        alert('กรุณาระบุ Google Apps Script Web App URL ก่อนครับ');
         return;
       }
       const items = Object.values(inspectionsMap);
       document.getElementById('cloudSyncMsg').innerText = `⏳ กำลังอัปโหลด ${items.length} รายการขึ้น Google Sheets...`;
       fetch(gasUrl, {
         method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action: 'syncBatch',
           items: items,
@@ -2137,11 +2290,15 @@
       })
       .then(r => r.json())
       .then(res => {
-        document.getElementById('cloudSyncMsg').innerText = '✅ ' + (res.message || 'ซิงค์สำเร็จ');
+        document.getElementById('cloudSyncMsg').innerHTML = '<span class="text-emerald-400">✅ ' + (res.message || 'ซิงค์สำเร็จ') + '</span>';
         showToast('ส่งข้อมูลทั้งหมดขึ้น Google Sheets เรียบร้อย!');
+        const dot = document.getElementById('cloudStatusDot');
+        if (dot) {
+          dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shrink-0';
+        }
       })
       .catch(err => {
-        document.getElementById('cloudSyncMsg').innerText = '❌ อัปโหลดไม่สำเร็จ: ' + err.message;
+        document.getElementById('cloudSyncMsg').innerHTML = '<span class="text-red-400">❌ อัปโหลดไม่สำเร็จ: ' + err.message + '</span>';
       });
     };
 

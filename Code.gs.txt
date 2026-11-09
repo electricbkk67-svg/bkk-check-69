@@ -105,6 +105,12 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (action === 'clearInspection') {
+      const res = clearInspectionRecord(payload);
+      return ContentService.createTextOutput(JSON.stringify(res))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     if (action === 'syncBatch') {
       const res = syncBatchRecords(payload);
       return ContentService.createTextOutput(JSON.stringify(res))
@@ -281,6 +287,94 @@ function saveInspectionRecord(data) {
     message: 'บันทึกผลการตรวจสอบเรียบร้อย',
     imageUrl: imageUrl,
     checkedAt: timestamp
+  };
+}
+
+/**
+ * ล้างผลการตรวจสอบของรายการนี้ในชีตต้นฉบับ ("ช่าง" หรือ "ทีดินและสิ่งปลูกสร้าง")
+ * และลบออกจากชีต "InspectionLog"
+ */
+function clearInspectionRecord(data) {
+  const ss = getSpreadsheet();
+  const targetSheetName = data.sheet || 'ช่าง';
+  const ws = ss.getSheetByName(targetSheetName);
+
+  if (ws) {
+    const isSheet1 = (targetSheetName === 'ช่าง');
+    const startStatusCol = isSheet1 ? 11 : 12; // ช่าง: K(11)-P(16), ที่ดิน: L(12)-Q(17)
+    const locCol = isSheet1 ? 17 : 18;
+    const noteCol = isSheet1 ? 19 : 20;
+    const imgCol = isSheet1 ? 20 : 21;
+    const timeCol = isSheet1 ? 21 : 22;
+
+    const lastRow = ws.getLastRow();
+    let actualRow = -1;
+
+    if (lastRow >= 6) {
+      const maxColCheck = 10;
+      const values = ws.getRange(1, 1, lastRow, maxColCheck).getDisplayValues();
+
+      const searchCode = String(data.code || '').trim();
+      const searchFullCode = String(data.fullCode || '').trim();
+      const searchSeq = String(data.seq || '').trim();
+      const searchName = String(data.name || '').trim();
+
+      for (let r = 5; r < values.length; r++) {
+        const row = values[r];
+        const rowCode = isSheet1 ? String(row[6] || '').trim() : String(row[7] || '').trim();
+        const rowFullCode = String(row[3] || '').trim();
+        const rowSeq = isSheet1 ? String(row[0] || '').trim() : String(row[4] || '').trim();
+        const rowName = isSheet1 ? String(row[7] || '').trim() : String(row[8] || '').trim();
+
+        if (searchCode && rowCode && rowCode === searchCode) {
+          actualRow = r + 1;
+          break;
+        } else if (searchFullCode && rowFullCode && rowFullCode === searchFullCode) {
+          actualRow = r + 1;
+          break;
+        } else if (searchSeq && rowSeq && searchSeq === rowSeq && searchName && rowName && searchName === rowName) {
+          actualRow = r + 1;
+          break;
+        }
+      }
+    }
+
+    if (actualRow === -1 && data.rowIndex) {
+      actualRow = parseInt(data.rowIndex, 10);
+    }
+
+    if (actualRow > 0 && actualRow <= lastRow) {
+      // 1. ล้างผลการตรวจทั้ง 6 ช่องให้ว่างเปล่า
+      ws.getRange(actualRow, startStatusCol, 1, 6).setValues([['', '', '', '', '', '']]);
+
+      // 2. คืนค่าช่องสถานที่
+      const origLoc = (data.originalLocation !== undefined) ? data.originalLocation : '';
+      ws.getRange(actualRow, locCol).setValue(origLoc);
+
+      // 3. คืนค่าช่องหมายเหตุเดิม (เช่น 'รับเพิ่ม 2569' หรือล้างออก)
+      const origNote = (data.originalNote !== undefined) ? data.originalNote : '';
+      ws.getRange(actualRow, noteCol).setValue(origNote);
+
+      // 4. ล้างรูปภาพและเวลาบันทึก
+      ws.getRange(actualRow, imgCol).setValue('');
+      ws.getRange(actualRow, timeCol).setValue('');
+    }
+  }
+
+  // ลบแถวออกจาก InspectionLog เพื่อไม่ให้ sync กลับมา
+  const logSheet = ss.getSheetByName('InspectionLog');
+  if (logSheet && logSheet.getLastRow() > 1) {
+    const ids = logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 1).getValues();
+    for (let i = ids.length - 1; i >= 0; i--) {
+      if (String(ids[i][0]) === String(data.id)) {
+        logSheet.deleteRow(i + 2);
+      }
+    }
+  }
+
+  return {
+    success: true,
+    message: 'ล้างผลการตรวจสอบในชีตเรียบร้อย'
   };
 }
 
